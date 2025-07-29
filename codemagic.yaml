@@ -28,10 +28,48 @@ workflows:
           # Clean the project
           flutter clean
           
-          # Build debug APK with older Flutter version
+          # Build universal debug APK first
+          echo "Building universal debug APK..."
           flutter build apk --debug
+          
+          # Build platform-specific APKs as backup
+          echo "Building platform-specific APKs..."
+          flutter build apk --debug --split-per-abi --target-platform android-arm,android-arm64
+          
+          # If the above fails, try direct Gradle build
+          if [ ! -f "build/app/outputs/flutter-apk/app-debug.apk" ] && [ ! -f "build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk" ]; then
+            echo "Flutter build failed, trying direct Gradle build..."
+            cd android
+            chmod +x ./gradlew
+            ./gradlew assembleDebug
+            cd ..
+          fi
+          
+          # List all APKs to verify
+          echo "Listing all APKs:"
+          find . -name "*.apk" | sort
+          
+          # Verify APK exists and show its size
+          if [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
+            echo "✅ Universal APK created successfully"
+            ls -lh build/app/outputs/flutter-apk/app-debug.apk
+          elif [ -f "build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk" ]; then
+            echo "✅ ARM64 APK created successfully"
+            ls -lh build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+          elif [ -f "build/app/outputs/flutter-apk/app-armeabi-v7a-debug.apk" ]; then
+            echo "✅ ARM v7 APK created successfully"
+            ls -lh build/app/outputs/flutter-apk/app-armeabi-v7a-debug.apk
+          elif [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            echo "✅ Gradle APK created successfully"
+            ls -lh android/app/build/outputs/apk/debug/app-debug.apk
+          else
+            echo "❌ No APK found!"
+            exit 1
+          fi
           
           # Restore original pubspec.yaml
           mv pubspec.yaml.bak pubspec.yaml
     artifacts:
-      - build/app/outputs/flutter-apk/app-debug.apk 
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/apk/debug/*.apk
+      - android/app/build/outputs/apk/debug/*.apk 
