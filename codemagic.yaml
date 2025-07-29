@@ -4,72 +4,65 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
-      flutter: 2.10.5  # Use much older Flutter version that supports embedding v1
-      java: 11  # Use Java 11 for Flutter 2.10.5
+      flutter: 3.10.0  # Use a more stable Flutter version
+      java: 11  # Use Java 11 for compatibility
     scripts:
-      - name: Prepare and build APK
+      - name: Create temporary project and copy android folder
         script: |
+          # Create a temporary Flutter project with working Android configuration
+          echo "Creating temporary Flutter project..."
+          mkdir -p /tmp/flutter_temp
+          cd /tmp/flutter_temp
+          flutter create --org com.advantage --project-name temp_project .
+          cd -
+          
+          # Create backup of original android folder
+          echo "Backing up original android folder..."
+          mv android android_original
+          
+          # Copy the template android folder from the temporary project
+          echo "Copying template android folder..."
+          cp -r /tmp/flutter_temp/android .
+          
+          # Update package name in template
+          echo "Updating package name..."
+          find android -type f -name "*.xml" -o -name "*.gradle" -o -name "*.java" -o -name "*.kt" | xargs sed -i '' 's/com.advantage.temp_project/com.advantage.crf_android/g'
+          
           # Create local.properties
           echo "flutter.sdk=$HOME/programs/flutter" > android/local.properties
           
           # Create a backup of pubspec.yaml
           cp pubspec.yaml pubspec.yaml.bak
           
-          # Modify pubspec.yaml to use older versions of packages
-          sed -i '' 's/flutter_secure_storage: \^9.0.0/flutter_secure_storage: \^5.0.2/' pubspec.yaml
-          sed -i '' 's/connectivity_plus: \^4.0.2/connectivity_plus: \^2.3.0/' pubspec.yaml
-          sed -i '' 's/package_info_plus: \^4.2.0/package_info_plus: \^1.4.2/' pubspec.yaml
-          sed -i '' 's/device_info_plus: \^9.1.0/device_info_plus: \^3.2.2/' pubspec.yaml
-          sed -i '' 's/android_id: \^0.1.3+1/android_id: \^0.0.7/' pubspec.yaml
+          # Modify pubspec.yaml to use compatible versions of packages
+          sed -i '' 's/flutter_secure_storage: \^9.0.0/flutter_secure_storage: \^8.0.0/' pubspec.yaml
+          sed -i '' 's/connectivity_plus: \^4.0.2/connectivity_plus: \^3.0.3/' pubspec.yaml
+          sed -i '' 's/package_info_plus: \^4.2.0/package_info_plus: \^3.1.2/' pubspec.yaml
+          sed -i '' 's/device_info_plus: \^9.1.0/device_info_plus: \^8.2.2/' pubspec.yaml
+          sed -i '' 's/android_id: \^0.1.3+1/android_id: \^0.1.3/' pubspec.yaml
           
+      - name: Build APK
+        script: |
           # Get dependencies
           flutter pub get
           
           # Clean the project
           flutter clean
           
-          # Build universal debug APK first
-          echo "Building universal debug APK..."
+          # Build debug APK
+          echo "Building debug APK..."
           flutter build apk --debug
-          
-          # Build platform-specific APKs as backup
-          echo "Building platform-specific APKs..."
-          flutter build apk --debug --split-per-abi --target-platform android-arm,android-arm64
-          
-          # If the above fails, try direct Gradle build
-          if [ ! -f "build/app/outputs/flutter-apk/app-debug.apk" ] && [ ! -f "build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk" ]; then
-            echo "Flutter build failed, trying direct Gradle build..."
-            cd android
-            chmod +x ./gradlew
-            ./gradlew assembleDebug
-            cd ..
-          fi
-          
-          # List all APKs to verify
-          echo "Listing all APKs:"
-          find . -name "*.apk" | sort
           
           # Verify APK exists and show its size
           if [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
-            echo "✅ Universal APK created successfully"
+            echo "✅ Debug APK created successfully"
             ls -lh build/app/outputs/flutter-apk/app-debug.apk
-          elif [ -f "build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk" ]; then
-            echo "✅ ARM64 APK created successfully"
-            ls -lh build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
-          elif [ -f "build/app/outputs/flutter-apk/app-armeabi-v7a-debug.apk" ]; then
-            echo "✅ ARM v7 APK created successfully"
-            ls -lh build/app/outputs/flutter-apk/app-armeabi-v7a-debug.apk
-          elif [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
-            echo "✅ Gradle APK created successfully"
-            ls -lh android/app/build/outputs/apk/debug/app-debug.apk
           else
             echo "❌ No APK found!"
             exit 1
           fi
           
-          # Restore original pubspec.yaml
+          # Restore original pubspec.yaml but keep the new android folder
           mv pubspec.yaml.bak pubspec.yaml
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
-      - build/app/outputs/apk/debug/*.apk
-      - android/app/build/outputs/apk/debug/*.apk 
+      - build/app/outputs/flutter-apk/app-debug.apk 
