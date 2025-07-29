@@ -4,135 +4,216 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
-      flutter: 2.10.5  # Use older Flutter version for maximum compatibility
       java: 11  # Use Java 11 for compatibility
     scripts:
-      - name: Create new project and build APK
+      - name: Create native Android app and build APK
         script: |
-          # Create a completely new Flutter project
-          echo "Creating new Flutter project..."
-          mkdir -p /tmp/crf_build
-          cd /tmp/crf_build
-          flutter create --org com.advantage --project-name crf_android .
+          # Create a directory for our native Android project
+          echo "Creating native Android project..."
+          mkdir -p /tmp/native_android
+          cd /tmp/native_android
           
-          # Create assets directories
-          mkdir -p assets/images
-          mkdir -p assets/fonts
+          # Create a basic Android project structure
+          mkdir -p app/src/main/java/com/advantage/crf_android
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
           
-          # Copy assets from original project
-          echo "Copying assets..."
-          cp -r $HOME/clone/assets/* assets/ || true
-          
-          # Create minimal pubspec.yaml with essential dependencies
-          cat > pubspec.yaml << 'EOL'
-          name: crf_android
-          description: CRF Android App
-          publish_to: 'none'
-          version: 1.0.0+1
-          
-          environment:
-            sdk: ">=2.16.0 <3.0.0"
-          
-          dependencies:
-            flutter:
-              sdk: flutter
-            cupertino_icons: ^1.0.2
-            http: ^0.13.4
-            shared_preferences: ^2.0.13
-            intl: ^0.17.0
-            flutter_secure_storage: ^5.0.2
-            connectivity_plus: ^2.2.1
-            package_info_plus: ^1.4.2
-            device_info_plus: ^3.2.2
-            crypto: ^3.0.1
-            android_id: ^0.0.7
-          
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^1.0.4
-          
-          flutter:
-            uses-material-design: true
-            assets:
-              - assets/images/
-              - assets/fonts/
-          EOL
-          
-          # Create a simple main.dart file that can be built
-          cat > lib/main.dart << 'EOL'
-          import 'package:flutter/material.dart';
-          
-          void main() {
-            runApp(const MyApp());
+          # Create build.gradle file for the project
+          cat > build.gradle << 'EOL'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.0.4'
+              }
           }
           
-          class MyApp extends StatelessWidget {
-            const MyApp({Key? key}) : super(key: key);
-          
-            @override
-            Widget build(BuildContext context) {
-              return MaterialApp(
-                title: 'CRF Android',
-                theme: ThemeData(
-                  primarySwatch: Colors.blue,
-                ),
-                home: const MyHomePage(title: 'CRF Android'),
-              );
-            }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
           }
           
-          class MyHomePage extends StatefulWidget {
-            const MyHomePage({Key? key, required this.title}) : super(key: key);
-            final String title;
-          
-            @override
-            State<MyHomePage> createState() => _MyHomePageState();
-          }
-          
-          class _MyHomePageState extends State<MyHomePage> {
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                appBar: AppBar(
-                  title: Text(widget.title),
-                ),
-                body: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const <Widget>[
-                      Text(
-                        'CRF Android App',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 20),
-                      Text(
-                        'Build Successful',
-                        style: TextStyle(fontSize: 18),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
+          task clean(type: Delete) {
+              delete rootProject.buildDir
           }
           EOL
           
-          # Get dependencies
-          flutter pub get
+          # Create settings.gradle
+          cat > settings.gradle << 'EOL'
+          include ':app'
+          EOL
           
-          # Build debug APK
-          echo "Building debug APK..."
-          flutter build apk --debug
+          # Create app/build.gradle
+          cat > app/build.gradle << 'EOL'
+          plugins {
+              id 'com.android.application'
+          }
+          
+          android {
+              compileSdkVersion 31
+              
+              defaultConfig {
+                  applicationId "com.advantage.crf_android"
+                  minSdkVersion 21
+                  targetSdkVersion 31
+                  versionCode 1
+                  versionName "1.0"
+              }
+              
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          }
+          
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.4.0'
+              implementation 'com.google.android.material:material:1.4.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.2'
+          }
+          EOL
+          
+          # Create AndroidManifest.xml
+          cat > app/src/main/AndroidManifest.xml << 'EOL'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.advantage.crf_android">
+              
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="CRF Android"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOL
+          
+          # Create MainActivity.java
+          cat > app/src/main/java/com/advantage/crf_android/MainActivity.java << 'EOL'
+          package com.advantage.crf_android;
+          
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+              }
+          }
+          EOL
+          
+          # Create activity_main.xml
+          cat > app/src/main/res/layout/activity_main.xml << 'EOL'
+          <?xml version="1.0" encoding="utf-8"?>
+          <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              xmlns:tools="http://schemas.android.com/tools"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              tools:context=".MainActivity">
+          
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="CRF Android App"
+                  android:textSize="24sp"
+                  app:layout_constraintBottom_toBottomOf="parent"
+                  app:layout_constraintLeft_toLeftOf="parent"
+                  app:layout_constraintRight_toRightOf="parent"
+                  app:layout_constraintTop_toTopOf="parent" />
+          
+          </androidx.constraintlayout.widget.ConstraintLayout>
+          EOL
+          
+          # Create colors.xml
+          cat > app/src/main/res/values/colors.xml << 'EOL'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#0056A4</color>
+              <color name="colorPrimaryDark">#004483</color>
+              <color name="colorAccent">#D81B60</color>
+          </resources>
+          EOL
+          
+          # Create styles.xml
+          cat > app/src/main/res/values/styles.xml << 'EOL'
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
+          EOL
+          
+          # Create strings.xml
+          cat > app/src/main/res/values/strings.xml << 'EOL'
+          <resources>
+              <string name="app_name">CRF Android</string>
+          </resources>
+          EOL
+          
+          # Create a simple icon (using a placeholder)
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          
+          # Create gradle wrapper
+          mkdir -p gradle/wrapper
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOL'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-7.0.2-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOL
+          
+          # Download gradle wrapper jar
+          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v7.0.2/gradle/wrapper/gradle-wrapper.jar
+          
+          # Create gradlew script
+          cat > gradlew << 'EOL'
+          #!/usr/bin/env sh
+          exec java -classpath gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "$@"
+          EOL
+          chmod +x gradlew
+          
+          # Build the APK
+          echo "Building APK..."
+          ./gradlew assembleDebug --stacktrace
           
           # Copy the APK to the original project's artifacts directory
-          mkdir -p $HOME/clone/build/app/outputs/flutter-apk/
-          cp build/app/outputs/flutter-apk/app-debug.apk $HOME/clone/build/app/outputs/flutter-apk/
-          
-          # Verify APK exists and show its size
-          if [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            mkdir -p $HOME/clone/build/app/outputs/flutter-apk/
+            cp app/build/outputs/apk/debug/app-debug.apk $HOME/clone/build/app/outputs/flutter-apk/
             echo "✅ Debug APK created successfully"
-            ls -lh build/app/outputs/flutter-apk/app-debug.apk
+            ls -lh app/build/outputs/apk/debug/app-debug.apk
           else
             echo "❌ No APK found!"
             exit 1
