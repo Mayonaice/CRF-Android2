@@ -1,15 +1,11 @@
 workflows:
   android-build:
-    name: Android Build
+    name: Android Debug Build
     max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
       flutter: 3.32.5
       java: 17
-      android_signing:
-        - keystore_reference
-      groups:
-        - google_credentials
       vars:
         PACKAGE_NAME: "com.advantage.crf_android"
     scripts:
@@ -40,12 +36,11 @@ workflows:
           cd android && ./gradlew clean && cd ..
           flutter clean
           
-          # Build with aggressive flags
-          flutter build apk --release --no-tree-shake-icons --no-pub --android-skip-build-dependency-validation
+          # Build debug APK with aggressive flags
+          flutter build apk --debug --no-tree-shake-icons --no-pub --android-skip-build-dependency-validation
     artifacts:
-      - build/app/outputs/flutter-apk/app-release.apk
-      - build/app/outputs/apk/**/*.apk
-      - build/app/outputs/bundle/**/*.aab
+      - build/app/outputs/flutter-apk/app-debug.apk
+      - build/app/outputs/apk/debug/*.apk
     publishing:
       email:
         recipients:
