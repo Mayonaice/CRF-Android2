@@ -6,48 +6,19 @@ workflows:
     environment:
       flutter: 3.32.5
       java: 17
-      vars:
-        PACKAGE_NAME: "com.advantage.crf_android"
     scripts:
-      - name: Set up local.properties
+      - name: Build APK
         script: |
+          # Create local.properties
           echo "flutter.sdk=$HOME/programs/flutter" > android/local.properties
-      - name: Get Flutter packages
-        script: |
-          flutter pub get
-      - name: Fix gradlew permissions
-        script: |
-          # Make gradlew executable
-          chmod +x android/gradlew
-      - name: Build APK with optimized settings
-        script: |
-          # Optimize Gradle settings
-          echo "org.gradle.jvmargs=-Xmx4096M -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8 -XX:+UseParallelGC" > android/gradle.properties
-          echo "android.useAndroidX=true" >> android/gradle.properties
-          echo "android.enableJetifier=true" >> android/gradle.properties
-          echo "android.nonTransitiveRClass=true" >> android/gradle.properties
-          echo "org.gradle.daemon=false" >> android/gradle.properties
-          echo "org.gradle.parallel=true" >> android/gradle.properties
-          # Removed configureOnDemand as it's private in some Gradle versions
-          echo "kotlin.code.style=official" >> android/gradle.properties
-          echo "android.defaults.buildfeatures.buildconfig=true" >> android/gradle.properties
-          echo "android.nonFinalResIds=false" >> android/gradle.properties
-          echo "flutter.minSdkVersion=21" >> android/gradle.properties
-          echo "flutter.targetSdkVersion=34" >> android/gradle.properties
-          echo "flutter.compileSdkVersion=34" >> android/gradle.properties
           
-          # Force clean using flutter command only
+          # Get dependencies
+          flutter pub get
+          
+          # Clean the project
           flutter clean
           
-          # Build debug APK with aggressive flags
-          flutter build apk --debug --no-tree-shake-icons --android-skip-build-dependency-validation
+          # Build debug APK
+          flutter build apk --debug
     artifacts:
-      - build/app/outputs/flutter-apk/app-debug.apk
-      - build/app/outputs/apk/debug/*.apk
-    publishing:
-      email:
-        recipients:
-          - user@example.com
-        notify:
-          success: true
-          failure: true 
+      - build/app/outputs/flutter-apk/app-debug.apk 

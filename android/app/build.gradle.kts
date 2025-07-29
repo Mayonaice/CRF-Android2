@@ -32,13 +32,10 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = true
+            isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
-            // Fix for shrink resources error
-            isShrinkResources = true
+            isShrinkResources = false
         }
         debug {
             isMinifyEnabled = false
@@ -65,17 +62,6 @@ android {
             excludes.add("META-INF/*.kotlin_module")
             pickFirsts.add("**/*.so")
         }
-    }
-
-    // Disable PNG crunching
-    aaptOptions {
-        cruncherEnabled = false
-    }
-
-    // Increase memory for dex
-    dexOptions {
-        javaMaxHeapSize = "4g"
-        preDexLibraries = false
     }
 }
 

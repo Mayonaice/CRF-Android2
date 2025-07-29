@@ -22,10 +22,4 @@ plugins {
     id("org.jetbrains.kotlin.android") version "1.9.22" apply false
 }
 
-// Optimize Gradle performance
-gradle.startParameter.apply {
-    // Removed configureOnDemand setting as it's private in some Gradle versions
-    maxWorkerCount = 2
-}
-
 include(":app")
