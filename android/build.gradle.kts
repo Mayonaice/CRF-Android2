@@ -3,6 +3,23 @@ allprojects {
         google()
         mavenCentral()
     }
+    
+    // Fix for android_id plugin namespace issue
+    project.afterEvaluate {
+        if (project.hasProperty('android')) {
+            if (project.name == 'android_id' && !project.android.hasProperty('namespace')) {
+                project.android.namespace = "io.flutter.plugins.androidid"
+            }
+        }
+    }
+    
+    // Force specific versions for compatibility
+    configurations.all {
+        resolutionStrategy {
+            force("androidx.core:core:1.9.0")
+            force("androidx.core:core-ktx:1.9.0")
+        }
+    }
 }
 
 val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()

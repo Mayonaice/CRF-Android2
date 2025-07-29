@@ -71,4 +71,14 @@ dependencies {
 
 flutter {
     source = "../.."
+}
+
+// Fix for android_id plugin
+allprojects {
+    configurations.all {
+        resolutionStrategy {
+            force("androidx.core:core:1.9.0")
+            force("androidx.core:core-ktx:1.9.0")
+        }
+    }
 } 
