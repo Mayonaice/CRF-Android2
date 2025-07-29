@@ -19,7 +19,6 @@ echo android.enableJetifier=true
 echo android.nonTransitiveRClass=true
 echo org.gradle.daemon=false
 echo org.gradle.parallel=true
-echo org.gradle.configureondemand=true
 echo kotlin.code.style=official
 echo android.defaults.buildfeatures.buildconfig=true
 echo android.nonFinalResIds=false
@@ -47,7 +46,7 @@ if %ERRORLEVEL% NEQ 0 (
   rmdir /S /Q %USERPROFILE%\.gradle\caches 2>nul
   
   echo Trying alternative build with minimal validation...
-  flutter build apk --debug --no-tree-shake-icons --no-pub --android-skip-build-dependency-validation
+  flutter build apk --debug --no-tree-shake-icons --android-skip-build-dependency-validation
   
   if %ERRORLEVEL% NEQ 0 (
     echo Alternative build failed, trying direct Gradle build...

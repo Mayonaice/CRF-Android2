@@ -24,7 +24,7 @@ plugins {
 
 // Optimize Gradle performance
 gradle.startParameter.apply {
-    configureOnDemand = false
+    // Removed configureOnDemand setting as it's private in some Gradle versions
     maxWorkerCount = 2
 }
 

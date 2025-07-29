@@ -15,6 +15,10 @@ workflows:
       - name: Get Flutter packages
         script: |
           flutter pub get
+      - name: Fix gradlew permissions
+        script: |
+          # Make gradlew executable
+          chmod +x android/gradlew
       - name: Build APK with optimized settings
         script: |
           # Optimize Gradle settings
@@ -24,7 +28,7 @@ workflows:
           echo "android.nonTransitiveRClass=true" >> android/gradle.properties
           echo "org.gradle.daemon=false" >> android/gradle.properties
           echo "org.gradle.parallel=true" >> android/gradle.properties
-          echo "org.gradle.configureondemand=true" >> android/gradle.properties
+          # Removed configureOnDemand as it's private in some Gradle versions
           echo "kotlin.code.style=official" >> android/gradle.properties
           echo "android.defaults.buildfeatures.buildconfig=true" >> android/gradle.properties
           echo "android.nonFinalResIds=false" >> android/gradle.properties
@@ -32,12 +36,11 @@ workflows:
           echo "flutter.targetSdkVersion=34" >> android/gradle.properties
           echo "flutter.compileSdkVersion=34" >> android/gradle.properties
           
-          # Force clean
-          cd android && ./gradlew clean && cd ..
+          # Force clean using flutter command only
           flutter clean
           
           # Build debug APK with aggressive flags
-          flutter build apk --debug --no-tree-shake-icons --no-pub --android-skip-build-dependency-validation
+          flutter build apk --debug --no-tree-shake-icons --android-skip-build-dependency-validation
     artifacts:
       - build/app/outputs/flutter-apk/app-debug.apk
       - build/app/outputs/apk/debug/*.apk
