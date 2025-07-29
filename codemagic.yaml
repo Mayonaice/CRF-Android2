@@ -4,27 +4,21 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
-      flutter: 3.32.5
+      flutter: 3.16.9  # Use older Flutter version that's more compatible with plugins
       java: 17
     scripts:
-      - name: Modify pubspec to remove problematic plugin
+      - name: Build with older Flutter version
         script: |
-          # Create a modified pubspec without android_id plugin
-          grep -v "android_id:" pubspec.yaml > pubspec_temp.yaml
-          mv pubspec_temp.yaml pubspec.yaml
-          
           # Create local.properties
           echo "flutter.sdk=$HOME/programs/flutter" > android/local.properties
           
-      - name: Build APK
-        script: |
-          # Get dependencies without upgrading
+          # Get dependencies
           flutter pub get
           
           # Clean the project
           flutter clean
           
-          # Build debug APK with special flags
-          flutter build apk --debug --no-android-gradle-daemon
+          # Build debug APK with older Flutter version
+          flutter build apk --debug
     artifacts:
       - build/app/outputs/flutter-apk/app-debug.apk 
