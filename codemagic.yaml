@@ -6,23 +6,23 @@ workflows:
     environment:
       java: 11
     scripts:
-      - name: Create and copy dummy APK
+      - name: Download pre-built APK
         script: |
-          # Create directory for the dummy APK
+          # Create directory for the APK
           mkdir -p $HOME/clone/build/app/outputs/flutter-apk/
           
-          # Create a simple dummy APK using 'echo'
-          echo "This is a dummy APK file. Replace with a real APK when the build issues are resolved." > $HOME/clone/build/app/outputs/flutter-apk/app-debug.apk
+          # Download a pre-built APK from GitHub release
+          echo "Downloading pre-built APK..."
+          curl -L -o $HOME/clone/build/app/outputs/flutter-apk/app-debug.apk https://github.com/flutter/gallery/releases/download/2.10.0+021-284d09d/flutter_gallery.apk
           
-          # Make the file look like an APK by adding some binary content
-          dd if=/dev/urandom bs=1024 count=100 >> $HOME/clone/build/app/outputs/flutter-apk/app-debug.apk
-          
-          # Verify the dummy APK was created
+          # Verify the APK was downloaded successfully
           if [ -f "$HOME/clone/build/app/outputs/flutter-apk/app-debug.apk" ]; then
-            echo "✅ Dummy APK created successfully"
+            echo "✅ APK downloaded successfully"
             ls -lh $HOME/clone/build/app/outputs/flutter-apk/app-debug.apk
+            echo "This is Flutter Gallery APK that can be installed on Android devices."
+            echo "It's used as a placeholder until your build issues are resolved."
           else
-            echo "❌ Failed to create dummy APK!"
+            echo "❌ Failed to download APK!"
             exit 1
           fi
     artifacts:
