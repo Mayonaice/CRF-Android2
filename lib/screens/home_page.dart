@@ -365,8 +365,8 @@ class _HomePageState extends State<HomePage> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFA9D0D7), // Same color as choose menu box
                       borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(20),
-                        // Removed topLeft and topRight to eliminate top gap
+                        bottomLeft: Radius.circular(50),
+                        // Mengubah menjadi satu sudut saja dengan radius lebih besar
                       ),
                     ),
                     child: Row(
@@ -384,10 +384,10 @@ class _HomePageState extends State<HomePage> {
                                   horizontal: isSmallScreen ? 20 : 30,
                                   vertical: isSmallScreen ? 8 : 12,
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(30),
-                        ),
+                                              decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(50), // Mengubah menjadi pill shape
+                      ),
                                 child: Center(
                                   child: Text(
                           'Dashboard Trip',
@@ -408,22 +408,24 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           // Belum Prepare
                                   Expanded(
-                                    child: _buildStatusBox(
-                                      title: 'Belum Prepare',
-                                      count: '1.000',
-                                      isSmallScreen: isSmallScreen,
-                                    ),
+                                    child:                                   _buildStatusBox(
+                                    title: 'Belum Prepare',
+                                    count: '1.000',
+                                    isSmallScreen: isSmallScreen,
+                                    isPill: true, // Mengubah menjadi pill shape
+                                  ),
                                   ),
                                   
                                   SizedBox(width: isSmallScreen ? 10 : 15),
                                   
                                   // Belum Return
                                   Expanded(
-                                    child: _buildStatusBox(
-                                      title: 'Belum Return',
-                                      count: '1.000',
-                                      isSmallScreen: isSmallScreen,
-                                      ),
+                                    child:                                   _buildStatusBox(
+                                    title: 'Belum Return',
+                                    count: '1.000',
+                                    isSmallScreen: isSmallScreen,
+                                    isPill: true, // Mengubah menjadi pill shape
+                                    ),
                                     ),
                                   ],
                                 ),
@@ -709,12 +711,13 @@ class _HomePageState extends State<HomePage> {
     required String title,
     required String count,
     required bool isSmallScreen,
+    bool isPill = false,
   }) {
     return Container(
       padding: EdgeInsets.all(isSmallScreen ? 8 : 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(isPill ? 50 : 10),
         border: Border.all(color: Colors.grey.shade300),
       ),
       child: Column(

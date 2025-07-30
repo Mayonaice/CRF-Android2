@@ -2064,19 +2064,19 @@ class _PrepareModePageState extends State<PrepareModePage> {
     Function(String)? onSealChange,
   }) {
     return Container(
-      height: isSmallScreen ? 32 : 36,
+      height: isSmallScreen ? 40 : 50,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Label section - fixed width
           SizedBox(
-            width: isSmallScreen ? 85 : 100,
+            width: isSmallScreen ? 90 : 110,
             child: Padding(
-              padding: EdgeInsets.only(bottom: isSmallScreen ? 4 : 6),
+              padding: EdgeInsets.only(bottom: isSmallScreen ? 6 : 8),
               child: Text(
                 '$label :',
                 style: TextStyle(
-                  fontSize: isSmallScreen ? 10 : 12,
+                  fontSize: isSmallScreen ? 12 : 14,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -2976,13 +2976,13 @@ class _PrepareModePageState extends State<PrepareModePage> {
     bool enableScan = false,
   }) {
     return Container(
-      height: isSmallScreen ? 36 : 45,
+      height: isSmallScreen ? 40 : 50,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Label section - fixed width
           SizedBox(
-            width: isSmallScreen ? 100 : 120,
+            width: isSmallScreen ? 90 : 110,
             child: Padding(
               padding: EdgeInsets.only(bottom: isSmallScreen ? 6 : 8),
               child: Text(

@@ -27,13 +27,9 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoadingBranches = false;
   List<Map<String, dynamic>> _availableBranches = [];
   String _androidId = 'Loading...'; // Store Android ID
-  bool _isTestMode = false; // Test mode toggle
   
   // Auth service
   final AuthService _authService = AuthService();
-
-  // Add controller for token input
-  final TextEditingController _tokenController = TextEditingController();
 
   @override
   void initState() {
@@ -134,7 +130,6 @@ class _LoginPageState extends State<LoginPage> {
     _usernameController.dispose();
     _passwordController.dispose();
     _noMejaController.dispose();
-    _tokenController.dispose();
     super.dispose();
   }
 
@@ -230,139 +225,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // Show test mode password dialog
-  Future<void> _showTestModeDialog() async {
-    final passwordController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    
-    return showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Test Mode Authentication',
-          style: TextStyle(fontSize: 16),
-        ),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: passwordController,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Enter test password',
-              border: OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (value != 'Test@123') {
-                return 'Invalid test password';
-              }
-              return null;
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _isTestMode = false;
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                setState(() {
-                  _isTestMode = true;
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: const Text(
-              'Enable',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Show token input dialog
-  Future<void> _showTokenInputDialog() async {
-    return showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Test Mode Login'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Masukkan token Bearer yang valid:'),
-              SizedBox(height: 10),
-              TextField(
-                controller: _tokenController,
-                decoration: InputDecoration(
-                  hintText: 'Bearer token...',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                setState(() => _isTestMode = false);
-                Navigator.of(context).pop();
-              },
-              child: Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () => _loginWithToken(),
-              child: Text('Login'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Login with token
-  Future<void> _loginWithToken() async {
-    String token = _tokenController.text.trim();
-    if (token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Token tidak boleh kosong')),
-      );
-      return;
-    }
-
-    // Remove 'Bearer ' prefix if present
-    if (token.toLowerCase().startsWith('bearer ')) {
-      token = token.substring(7);
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final result = await _authService.loginWithToken(token);
-      
-      if (result['success']) {
-        Navigator.of(context).pop(); // Close dialog
-        Navigator.pushReplacementNamed(context, '/home');
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['message'])),
-        );
-      }
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
   // Modify _performLogin to handle test mode
   Future<void> _performLogin() async {
     if (!_formKey.currentState!.validate()) {
@@ -415,15 +277,13 @@ class _LoginPageState extends State<LoginPage> {
       final token = await _authService.getToken();
       debugPrint('🔴 DEBUG: Token after login: ${token != null ? "Found (${token.length} chars)" : "NULL"}');
        
-      if (result['success'] || (_isTestMode && result['errorType'] == 'ANDROID_ID_ERROR')) {
-        // startGlobalTokenRefresh(); // Removed as per edit hint
-        
+      if (result['success']) {
         HapticFeedback.mediumImpact();
          
         ErrorDialogs.showSuccessDialog(
           context,
           title: 'Login Berhasil!',
-          message: _isTestMode ? 'Login berhasil (Test Mode)' : 'Selamat datang di aplikasi CRF',
+          message: 'Selamat datang di aplikasi CRF',
           buttonText: 'Lanjutkan',
           onPressed: () async {
             Navigator.pop(context);
@@ -526,335 +386,251 @@ class _LoginPageState extends State<LoginPage> {
                 alignment: Alignment.center,
               ),
             ),
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: screenWidth * 0.05,
-                vertical: 0, // Remove vertical padding to allow more space
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Add more space at the top to match original layout
-                  SizedBox(height: screenHeight * 0.15),
-                  
-                  // Logo and form section with responsive width
-                  Container(
-                    width: isTablet ? screenWidth * 0.6 : screenWidth * 0.9,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(15),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 10,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Login text - responsive
-                        Text(
-                          'Login Your Account',
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Login box
+                Container(
+                  width: isTablet ? screenWidth * 0.5 : screenWidth * 0.85,
+                  margin: EdgeInsets.only(top: screenHeight * 0.15),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    children: [
+                      // Login title
+                      Padding(
+                        padding: EdgeInsets.only(top: 20, bottom: 20),
+                        child: Text(
+                          'Login Yout Account',
                           style: TextStyle(
-                            fontSize: isTablet ? 28 : 22,
+                            fontSize: 22,
                             fontWeight: FontWeight.bold,
-                            color: const Color(0xFF0056A4),
+                            color: Color(0xFF0056A4),
                           ),
                         ),
-                        
-                        const SizedBox(height: 30),
-                        
-                        // Form - responsive dengan padding tambahan
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: isTablet ? 20.0 : 10.0),
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Username/ID/Email/HP
-                                const Text(
-                                  'User ID/Email/No.Hp',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
+                      ),
+                      
+                      // Form
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 20),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // User ID field
+                              Text(
+                                'User ID/Email/No.Hp',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 5),
+                              TextFormField(
+                                controller: _usernameController,
+                                decoration: InputDecoration(
+                                  hintText: 'Enter your User ID, Email or Phone Number',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 20),
+                                  suffixIcon: Icon(Icons.person),
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter your username';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              
+                              SizedBox(height: 15),
+                              
+                              // Password field
+                              Text(
+                                'Password',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 5),
+                              TextFormField(
+                                controller: _passwordController,
+                                obscureText: !_isPasswordVisible,
+                                decoration: InputDecoration(
+                                  hintText: 'Enter your password',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 20),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _isPasswordVisible = !_isPasswordVisible;
+                                      });
+                                      HapticFeedback.lightImpact();
+                                    },
                                   ),
                                 ),
-                                const SizedBox(height: 5),
-                                TextFormField(
-                                  controller: _usernameController,
-                                  decoration: InputDecoration(
-                                    hintText: 'Enter your User ID, Email or Phone Number',
-                                    border: OutlineInputBorder(
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter your password';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              
+                              SizedBox(height: 15),
+                              
+                              // No. Meja field
+                              Text(
+                                'No. Meja',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 5),
+                              TextFormField(
+                                controller: _noMejaController,
+                                decoration: InputDecoration(
+                                  hintText: 'Enter table number',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 20),
+                                  suffixIcon: Icon(Icons.table_chart),
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter table number';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              
+                              SizedBox(height: 15),
+                              
+                              // Group field
+                              Text(
+                                'Group',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 5),
+                              DropdownButtonFormField<String>(
+                                value: _selectedBranch,
+                                decoration: InputDecoration(
+                                  hintText: _isLoadingBranches 
+                                      ? 'Loading branches...'
+                                      : _availableBranches.isEmpty 
+                                          ? 'Fill all fields above to load branches'
+                                          : 'Select branch & role',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 20),
+                                ),
+                                items: _availableBranches.map((branch) {
+                                  return DropdownMenuItem<String>(
+                                    value: branch['displayText'] as String,
+                                    child: Text(
+                                      (branch['displayText'] as String?) ?? '',
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: _availableBranches.isEmpty ? null : (String? value) {
+                                  setState(() {
+                                    _selectedBranch = value;
+                                  });
+                                  HapticFeedback.selectionClick();
+                                },
+                                validator: (value) {
+                                  if (_availableBranches.isEmpty) {
+                                    return 'No branches available. Check your credentials.';
+                                  }
+                                  if (_availableBranches.length > 1 && value == null) {
+                                    return 'Please select a branch';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              
+                              // Login button
+                              Container(
+                                width: double.infinity,
+                                margin: EdgeInsets.symmetric(vertical: 30),
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : _performLogin,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Color(0xFF1976D2),
+                                    shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(30),
                                     ),
-                                    filled: true,
-                                    fillColor: Colors.white,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                                    suffixIcon: const Icon(Icons.person),
+                                    padding: EdgeInsets.symmetric(vertical: 12),
                                   ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Please enter your username';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                
-                                const SizedBox(height: 15),
-                                
-                                // Password
-                                const Text(
-                                  'Password',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 5),
-                                TextFormField(
-                                  controller: _passwordController,
-                                  obscureText: !_isPasswordVisible,
-                                  decoration: InputDecoration(
-                                    hintText: 'Enter your password',
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(30),
-                                    ),
-                                    filled: true,
-                                    fillColor: Colors.white,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                                    suffixIcon: IconButton(
-                                      icon: Icon(
-                                        _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                                      ),
-                                      onPressed: () {
-                                        setState(() {
-                                          _isPasswordVisible = !_isPasswordVisible;
-                                        });
-                                        // Android haptic feedback
-                                        HapticFeedback.lightImpact();
-                                      },
-                                    ),
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Please enter your password';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                
-                                const SizedBox(height: 15),
-                                
-                                // No. Meja
-                                const Text(
-                                  'No. Meja',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 5),
-                                TextFormField(
-                                  controller: _noMejaController,
-                                  decoration: InputDecoration(
-                                    hintText: 'Enter table number',
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(30),
-                                    ),
-                                    filled: true,
-                                    fillColor: Colors.white,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                                    suffixIcon: const Icon(Icons.table_chart),
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Please enter table number';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                
-                                const SizedBox(height: 15),
-                                
-                                // Branch/Role dropdown (auto-populated)
-                                Row(
-                                  children: [
-                                    const Text(
-                                      'Branch & Role',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    if (_isLoadingBranches) ...[
-                                      const SizedBox(width: 10),
-                                      const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
+                                  child: _isLoading
+                                      ? SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : Text(
+                                          'Login',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ],
                                 ),
-                                const SizedBox(height: 5),
-                                DropdownButtonFormField<String>(
-                                  value: _selectedBranch,
-                                  decoration: InputDecoration(
-                                    hintText: _isLoadingBranches 
-                                        ? 'Loading branches...'
-                                        : _availableBranches.isEmpty 
-                                            ? 'Fill all fields above to load branches'
-                                            : 'Select branch & role',
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(30),
-                                    ),
-                                    filled: true,
-                                    fillColor: _availableBranches.isEmpty ? Colors.grey.shade100 : Colors.white,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                                    suffixIcon: _isLoadingBranches 
-                                        ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          )
-                                        : Icon(
-                                            _availableBranches.isNotEmpty ? Icons.business : Icons.info_outline,
-                                            color: _availableBranches.isNotEmpty ? null : Colors.grey,
-                                          ),
-                                  ),
-                                  items: _availableBranches.map((branch) {
-                                    return DropdownMenuItem<String>(
-                                      value: branch['displayText'] as String,
-                                      child: Text(
-                                        (branch['displayText'] as String?) ?? '',
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                    );
-                                  }).toList(),
-                                  onChanged: _availableBranches.isEmpty ? null : (String? value) {
-                                    setState(() {
-                                      _selectedBranch = value;
-                                    });
-                                    // Android haptic feedback
-                                    HapticFeedback.selectionClick();
-                                  },
-                                  validator: (value) {
-                                    if (_availableBranches.isEmpty) {
-                                      return 'No branches available. Check your credentials.';
-                                    }
-                                    if (_availableBranches.length > 1 && value == null) {
-                                      return 'Please select a branch';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                
-                                const SizedBox(height: 30),
-                                
-                                // Login button
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: 50,
-                                  child: ElevatedButton(
-                                    onPressed: _isLoading ? null : _performLogin,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF2196F3),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(30),
-                                      ),
-                                      elevation: 3,
-                                    ),
-                                    child: _isLoading
-                                        ? const SizedBox(
-                                            width: 24,
-                                            height: 24,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                            ),
-                                          )
-                                        : const Text(
-                                            'Login',
-                                            style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                  ),
-                                ),
-
-                                // Simple AndroidID display
-                                const SizedBox(height: 16),
-                                Center(
+                              ),
+                              
+                              // IMEI display
+                              Center(
+                                child: Padding(
+                                  padding: EdgeInsets.only(bottom: 15),
                                   child: Text(
                                     'IMEI = $_androidId',
-                                    style: const TextStyle(
-                                      fontSize: 13.5,
+                                    style: TextStyle(
+                                      fontSize: 13,
                                       color: Colors.black54,
                                       fontFamily: 'monospace',
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Versi aplikasi dengan tulisan kecil di bagian bawah
-                  Text(
+                ),
+                
+                // Version info at bottom
+                Padding(
+                  padding: EdgeInsets.only(top: 20),
+                  child: Text(
                     'CRF Android App v1.0',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: isTablet ? 14 : 12,
-                      fontWeight: FontWeight.normal,
+                      fontSize: 12,
                     ),
                   ),
-                  
-                  // Add test mode switch in bottom corner
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 20, right: 10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Test Mode',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                          Switch(
-                            value: _isTestMode,
-                            onChanged: (value) {
-                              if (value) {
-                                _showTokenInputDialog();
-                              } else {
-                                setState(() {
-                                  _isTestMode = false;
-                                });
-                              }
-                            },
-                            activeColor: Colors.greenAccent,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

@@ -4,6 +4,7 @@ import 'screens/login_page.dart';
 import 'screens/home_page.dart';
 import 'screens/prepare_mode_screen.dart';
 import 'screens/return_mode_screen.dart';
+import 'screens/return_page.dart'; // Tambahkan import untuk ReturnModePage
 import 'screens/profile_menu_screen.dart';
 import 'screens/device_info_screen.dart';
 import 'screens/return_validation_screen.dart';
@@ -337,7 +338,7 @@ class _CrfAppState extends State<CrfApp> {
           '/login': (context) => const LoginPage(),
           '/home': (context) => const HomePage(),
           '/prepare_mode': (context) => const PrepareModePage(),
-          '/return_page': (context) => const ReturnModeScreen(),
+          '/return_page': (context) => const ReturnModePage(),
           '/profile': (context) => const ProfileMenuScreen(),
           '/device_info': (context) => const DeviceInfoScreen(),
           '/return_validation': (context) => const ReturnValidationScreen(),
