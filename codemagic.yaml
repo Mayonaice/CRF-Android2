@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m1
     environment:
-      flutter: 2.8.1 # Menggunakan Flutter versi stabil yang lebih lama
+      flutter: 2.8.1
       java: 11
     scripts:
       - name: Setup and build APK
@@ -29,14 +29,6 @@ workflows:
             flutter:
               sdk: flutter
             cupertino_icons: ^1.0.2
-            http: ^0.13.4
-            shared_preferences: ^2.0.11
-            intl: ^0.17.0
-            flutter_secure_storage: ^5.0.2
-            connectivity_plus: ^2.2.0
-            package_info_plus: ^1.3.0
-            device_info_plus: ^3.2.1
-            path_provider: ^2.0.8
           
           dev_dependencies:
             flutter_test:
@@ -91,10 +83,384 @@ workflows:
           mkdir -p assets/images
           mkdir -p assets/fonts
           
-          # Update android/app/build.gradle untuk minSdkVersion
-          if [ -f "android/app/build.gradle" ]; then
-            sed -i '' 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/' android/app/build.gradle
+          # Buat struktur folder android
+          mkdir -p android/app/src/main/kotlin/com/advantage/crf_android
+          mkdir -p android/app/src/main/res/drawable
+          mkdir -p android/app/src/main/res/values
+          
+          # Buat styles.xml untuk tema
+          cat > android/app/src/main/res/values/styles.xml << 'EOL'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">@android:color/white</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">@android:color/white</item>
+              </style>
+          </resources>
+          EOL
+          
+          # Buat MainActivity.kt dengan embedding v2
+          cat > android/app/src/main/kotlin/com/advantage/crf_android/MainActivity.kt << 'EOL'
+          package com.advantage.crf_android
+          
+          import io.flutter.embedding.android.FlutterActivity
+          
+          class MainActivity: FlutterActivity() {
+          }
+          EOL
+          
+          # Buat AndroidManifest.xml dengan embedding v2
+          cat > android/app/src/main/AndroidManifest.xml << 'EOL'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.advantage.crf_android">
+              <application
+                  android:name="${applicationName}"
+                  android:label="CRF Android"
+                  android:icon="@mipmap/ic_launcher">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:theme="@style/LaunchTheme"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+                      android:hardwareAccelerated="true"
+                      android:windowSoftInputMode="adjustResize">
+                      <meta-data
+                          android:name="io.flutter.embedding.android.NormalTheme"
+                          android:resource="@style/NormalTheme"
+                          />
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+                  <meta-data
+                      android:name="flutterEmbedding"
+                      android:value="2" />
+              </application>
+          </manifest>
+          EOL
+          
+          # Buat build.gradle untuk app dengan konfigurasi yang benar
+          cat > android/app/build.gradle << 'EOL'
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withReader('UTF-8') { reader ->
+                  localProperties.load(reader)
+              }
+          }
+          
+          def flutterRoot = localProperties.getProperty('flutter.sdk')
+          if (flutterRoot == null) {
+              throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+          }
+          
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+          if (flutterVersionCode == null) {
+              flutterVersionCode = '1'
+          }
+          
+          def flutterVersionName = localProperties.getProperty('flutter.versionName')
+          if (flutterVersionName == null) {
+              flutterVersionName = '1.0'
+          }
+          
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+          apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+          
+          android {
+              compileSdkVersion 31
+          
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          
+              kotlinOptions {
+                  jvmTarget = '1.8'
+              }
+          
+              sourceSets {
+                  main.java.srcDirs += 'src/main/kotlin'
+              }
+          
+              defaultConfig {
+                  applicationId "com.advantage.crf_android"
+                  minSdkVersion 21
+                  targetSdkVersion 31
+                  versionCode flutterVersionCode.toInteger()
+                  versionName flutterVersionName
+              }
+          
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          
+          flutter {
+              source '../..'
+          }
+          
+          dependencies {
+              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.6.10"
+          }
+          EOL
+          
+          # Buat build.gradle root
+          cat > android/build.gradle << 'EOL'
+          buildscript {
+              ext.kotlin_version = '1.6.10'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.0.2'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
+          
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
+          EOL
+          
+          # Buat settings.gradle
+          cat > android/settings.gradle << 'EOL'
+          include ':app'
+          
+          def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
+          def properties = new Properties()
+          
+          assert localPropertiesFile.exists()
+          localPropertiesFile.withReader("UTF-8") { reader -> properties.load(reader) }
+          
+          def flutterSdkPath = properties.getProperty("flutter.sdk")
+          assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+          apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
+          EOL
+          
+          # Buat gradle-wrapper.properties
+          mkdir -p android/gradle/wrapper
+          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOL'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-7.0.2-all.zip
+          EOL
+          
+          # Unduh gradle-wrapper.jar
+          echo "Downloading gradle-wrapper.jar..."
+          curl -L -o android/gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v7.0.2/gradle/wrapper/gradle-wrapper.jar
+          
+          # Buat local.properties
+          cat > android/local.properties << 'EOL'
+          flutter.sdk=/Users/builder/programs/flutter
+          EOL
+          
+          # Buat gradlew executable
+          cat > android/gradlew << 'EOL'
+          #!/usr/bin/env bash
+          
+          ##############################################################################
+          ##
+          ##  Gradle start up script for UN*X
+          ##
+          ##############################################################################
+          
+          # Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+          DEFAULT_JVM_OPTS=""
+          
+          APP_NAME="Gradle"
+          APP_BASE_NAME=`basename "$0"`
+          
+          # Use the maximum available, or set MAX_FD != -1 to use that value.
+          MAX_FD="maximum"
+          
+          warn ( ) {
+              echo "$*"
+          }
+          
+          die ( ) {
+              echo
+              echo "$*"
+              echo
+              exit 1
+          }
+          
+          # OS specific support (must be 'true' or 'false').
+          cygwin=false
+          msys=false
+          darwin=false
+          case "`uname`" in
+            CYGWIN* )
+              cygwin=true
+              ;;
+            Darwin* )
+              darwin=true
+              ;;
+            MINGW* )
+              msys=true
+              ;;
+          esac
+          
+          # Attempt to set APP_HOME
+          # Resolve links: $0 may be a link
+          PRG="$0"
+          # Need this for relative symlinks.
+          while [ -h "$PRG" ] ; do
+              ls=`ls -ld "$PRG"`
+              link=`expr "$ls" : '.*-> \(.*\)$'`
+              if expr "$link" : '/.*' > /dev/null; then
+                  PRG="$link"
+              else
+                  PRG=`dirname "$PRG"`"/$link"
+              fi
+          done
+          SAVED="`pwd`"
+          cd "`dirname \"$PRG\"`/" >/dev/null
+          APP_HOME="`pwd -P`"
+          cd "$SAVED" >/dev/null
+          
+          CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+          
+          # Determine the Java command to use to start the JVM.
+          if [ -n "$JAVA_HOME" ] ; then
+              if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+                  # IBM's JDK on AIX uses strange locations for the executables
+                  JAVACMD="$JAVA_HOME/jre/sh/java"
+              else
+                  JAVACMD="$JAVA_HOME/bin/java"
+              fi
+              if [ ! -x "$JAVACMD" ] ; then
+                  die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
+          
+          Please set the JAVA_HOME variable in your environment to match the
+          location of your Java installation."
+              fi
+          else
+              JAVACMD="java"
+              which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+          
+          Please set the JAVA_HOME variable in your environment to match the
+          location of your Java installation."
           fi
+          
+          # Increase the maximum file descriptors if we can.
+          if [ "$cygwin" = "false" -a "$darwin" = "false" ] ; then
+              MAX_FD_LIMIT=`ulimit -H -n`
+              if [ $? -eq 0 ] ; then
+                  if [ "$MAX_FD" = "maximum" -o "$MAX_FD" = "max" ] ; then
+                      MAX_FD="$MAX_FD_LIMIT"
+                  fi
+                  ulimit -n $MAX_FD
+                  if [ $? -ne 0 ] ; then
+                      warn "Could not set maximum file descriptor limit: $MAX_FD"
+                  fi
+              else
+                  warn "Could not query maximum file descriptor limit: $MAX_FD_LIMIT"
+              fi
+          fi
+          
+          # For Darwin, add options to specify how the application appears in the dock
+          if $darwin; then
+              GRADLE_OPTS="$GRADLE_OPTS \"-Xdock:name=$APP_NAME\" \"-Xdock:icon=$APP_HOME/media/gradle.icns\""
+          fi
+          
+          # For Cygwin, switch paths to Windows format before running java
+          if $cygwin ; then
+              APP_HOME=`cygpath --path --mixed "$APP_HOME"`
+              CLASSPATH=`cygpath --path --mixed "$CLASSPATH"`
+              JAVACMD=`cygpath --unix "$JAVACMD"`
+          
+              # We build the pattern for arguments to be converted via cygpath
+              ROOTDIRSRAW=`find -L / -maxdepth 1 -mindepth 1 -type d 2>/dev/null`
+              SEP=""
+              for dir in $ROOTDIRSRAW ; do
+                  ROOTDIRS="$ROOTDIRS$SEP$dir"
+                  SEP="|"
+              done
+              OURCYGPATTERN="(^($ROOTDIRS))"
+              # Add a user-defined pattern to the cygpath arguments
+              if [ "$GRADLE_CYGPATTERN" != "" ] ; then
+                  OURCYGPATTERN="$OURCYGPATTERN|($GRADLE_CYGPATTERN)"
+              fi
+              # Now convert the arguments - kludge to limit ourselves to /bin/sh
+              i=0
+              for arg in "$@" ; do
+                  CHECK=`echo "$arg"|egrep -c "$OURCYGPATTERN" -`
+                  CHECK2=`echo "$arg"|egrep -c "^-"`                                 ### Determine if an option
+          
+                  if [ $CHECK -ne 0 ] && [ $CHECK2 -eq 0 ] ; then                    ### Added a condition
+                      eval `echo args$i`=`cygpath --path --ignore --mixed "$arg"`
+                  else
+                      eval `echo args$i`="\"$arg\""
+                  fi
+                  i=$((i+1))
+              done
+              case $i in
+                  (0) set -- ;;
+                  (1) set -- "$args0" ;;
+                  (2) set -- "$args0" "$args1" ;;
+                  (3) set -- "$args0" "$args1" "$args2" ;;
+                  (4) set -- "$args0" "$args1" "$args2" "$args3" ;;
+                  (5) set -- "$args0" "$args1" "$args2" "$args3" "$args4" ;;
+                  (6) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" ;;
+                  (7) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" ;;
+                  (8) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" ;;
+                  (9) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" "$args8" ;;
+              esac
+          fi
+          
+          # Split up the JVM_OPTS And GRADLE_OPTS values into an array, following the shell quoting and substitution rules
+          function splitJvmOpts() {
+              JVM_OPTS=("$@")
+          }
+          eval splitJvmOpts $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS
+          JVM_OPTS[${#JVM_OPTS[*]}]="-Dorg.gradle.appname=$APP_BASE_NAME"
+          
+          exec "$JAVACMD" "${JVM_OPTS[@]}" -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+          EOL
+          
+          # Make gradlew executable
+          chmod +x android/gradlew
+          
+          # Buat ic_launcher.png minimal
+          mkdir -p android/app/src/main/res/mipmap-mdpi
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/res/mipmap-xhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+          
+          # Buat ikon sederhana (1x1 piksel putih)
+          echo -n -e "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A\x00\x00\x00\x0D\x49\x48\x44\x52\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1F\x15\xC4\x89\x00\x00\x00\x0A\x49\x44\x41\x54\x78\x9C\x63\xF8\x0F\x00\x01\x01\x01\x00\x1B\x0C\x1B\x4C\x00\x00\x00\x00\x49\x45\x4E\x44\xAE\x42\x60\x82" > android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           
           # Get dependencies
           flutter pub get
@@ -109,12 +475,17 @@ workflows:
             ls -lh build/app/outputs/flutter-apk/app-debug.apk
           else
             echo "❌ APK build gagal!"
-            echo "Mencoba build lagi dengan flag tambahan..."
-            flutter build apk --debug --no-shrink -v
+            echo "Mencoba build lagi dengan Gradle langsung..."
+            cd android && ./gradlew assembleDebug
             
-            if [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
+            if [ -f "../build/app/outputs/flutter-apk/app-debug.apk" ]; then
               echo "✅ APK build berhasil pada percobaan kedua!"
-              ls -lh build/app/outputs/flutter-apk/app-debug.apk
+              ls -lh ../build/app/outputs/flutter-apk/app-debug.apk
+            elif [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+              echo "✅ APK build berhasil dengan Gradle langsung!"
+              mkdir -p ../build/app/outputs/flutter-apk/
+              cp app/build/outputs/apk/debug/app-debug.apk ../build/app/outputs/flutter-apk/
+              ls -lh ../build/app/outputs/flutter-apk/app-debug.apk
             else
               echo "❌ APK build masih gagal!"
               exit 1
