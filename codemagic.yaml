@@ -4,8 +4,8 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m1
     environment:
-      flutter: 2.8.1
-      java: 11
+      flutter: 3.13.9 # Menggunakan versi Flutter yang lebih baru dan stabil
+      java: 17 # Menggunakan Java 17 untuk kompatibilitas dengan Gradle terbaru
     scripts:
       - name: Setup and build APK
         script: |
@@ -15,237 +15,94 @@ workflows:
           echo "Java version:"
           java -version
           
-          # Buat pubspec.yaml baru yang kompatibel dengan Flutter 2.8.1
-          cat > pubspec.yaml << 'EOL'
-          name: crf_android
-          description: CRF Android Application
-          publish_to: 'none'
-          version: 1.0.0+1
+          # PENTING: Tidak mengganti pubspec.yaml
+          # Gunakan pubspec.yaml yang ada untuk mempertahankan semua dependensi
           
-          environment:
-            sdk: ">=2.12.0 <3.0.0"
+          # PENTING: Tidak mengganti main.dart
+          # Gunakan main.dart yang ada untuk mempertahankan semua fitur aplikasi
           
-          dependencies:
-            flutter:
-              sdk: flutter
-            cupertino_icons: ^1.0.2
-          
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^1.0.0
-          
-          flutter:
-            uses-material-design: true
-            assets:
-              - assets/images/
-              - assets/fonts/
-          EOL
-          
-          # Buat main.dart minimal
-          mkdir -p lib
-          cat > lib/main.dart << 'EOL'
-          import 'package:flutter/material.dart';
-          
-          void main() {
-            runApp(const MyApp());
-          }
-          
-          class MyApp extends StatelessWidget {
-            const MyApp({Key? key}) : super(key: key);
-          
-            @override
-            Widget build(BuildContext context) {
-              return MaterialApp(
-                title: 'CRF Android',
-                theme: ThemeData(primarySwatch: Colors.blue),
-                home: const MyHomePage(),
-              );
-            }
-          }
-          
-          class MyHomePage extends StatelessWidget {
-            const MyHomePage({Key? key}) : super(key: key);
-          
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                appBar: AppBar(title: const Text('CRF Android')),
-                body: const Center(
-                  child: Text('Build berhasil', style: TextStyle(fontSize: 24)),
-                ),
-              );
-            }
-          }
-          EOL
-          
-          # Buat folder assets
+          # Buat folder assets jika belum ada
           mkdir -p assets/images
           mkdir -p assets/fonts
           
-          # Buat struktur folder android
-          mkdir -p android/app/src/main/kotlin/com/advantage/crf_android
-          mkdir -p android/app/src/main/res/drawable
-          mkdir -p android/app/src/main/res/values
+          # Pastikan semua dependensi terinstall
+          echo "Installing dependencies..."
+          flutter pub get
           
-          # Buat styles.xml untuk tema
-          cat > android/app/src/main/res/values/styles.xml << 'EOL'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">@android:color/white</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">@android:color/white</item>
-              </style>
-          </resources>
-          EOL
+          # Aktifkan multidex untuk menangani banyak metode
+          echo "Configuring multidex..."
+          if [ ! -f "android/app/src/main/java/com/advantage/crf_android/MultidexApplication.java" ]; then
+            mkdir -p android/app/src/main/java/com/advantage/crf_android
+            cat > android/app/src/main/java/com/advantage/crf_android/MultidexApplication.java << 'EOL'
+          package com.advantage.crf_android;
           
-          # Buat MainActivity.kt dengan embedding v2
-          cat > android/app/src/main/kotlin/com/advantage/crf_android/MainActivity.kt << 'EOL'
-          package com.advantage.crf_android
+          import androidx.multidex.MultiDexApplication;
           
-          import io.flutter.embedding.android.FlutterActivity
-          
-          class MainActivity: FlutterActivity() {
+          public class MultidexApplication extends MultiDexApplication {
           }
           EOL
+          fi
           
-          # Buat AndroidManifest.xml dengan embedding v2
-          cat > android/app/src/main/AndroidManifest.xml << 'EOL'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.advantage.crf_android">
-              <application
-                  android:name="${applicationName}"
-                  android:label="CRF Android"
-                  android:icon="@mipmap/ic_launcher">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-                      android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
-                      <meta-data
-                          android:name="io.flutter.embedding.android.NormalTheme"
-                          android:resource="@style/NormalTheme"
-                          />
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-                  <meta-data
-                      android:name="flutterEmbedding"
-                      android:value="2" />
-              </application>
-          </manifest>
+          # Pastikan AndroidManifest.xml menggunakan MultidexApplication
+          if grep -q "android:name=\"\${applicationName}\"" "android/app/src/main/AndroidManifest.xml"; then
+            echo "Updating AndroidManifest.xml to use MultidexApplication..."
+            sed -i '' 's/android:name="\${applicationName}"/android:name=".MultidexApplication"/g' android/app/src/main/AndroidManifest.xml
+          fi
+          
+          # Pastikan build.gradle memiliki konfigurasi yang benar
+          if [ -f "android/app/build.gradle" ]; then
+            echo "Updating build.gradle for multidex..."
+            if ! grep -q "multiDexEnabled true" "android/app/build.gradle"; then
+              sed -i '' '/defaultConfig {/a\\        multiDexEnabled true' android/app/build.gradle
+            fi
+            
+            if ! grep -q "implementation 'androidx.multidex:multidex:" "android/app/build.gradle"; then
+              sed -i '' '/dependencies {/a\\    implementation "androidx.multidex:multidex:2.0.1"' android/app/build.gradle
+            fi
+          fi
+          
+          if [ -f "android/app/build.gradle.kts" ]; then
+            echo "Updating build.gradle.kts for multidex..."
+            if ! grep -q "multiDexEnabled = true" "android/app/build.gradle.kts"; then
+              sed -i '' '/defaultConfig {/a\\        multiDexEnabled = true' android/app/build.gradle.kts
+            fi
+            
+            if ! grep -q "implementation(\"androidx.multidex:multidex:" "android/app/build.gradle.kts"; then
+              sed -i '' '/dependencies {/a\\    implementation("androidx.multidex:multidex:2.0.1")' android/app/build.gradle.kts
+            fi
+          fi
+          
+          # Tambahkan proguard rules untuk menghindari masalah obfuscation
+          cat > android/app/proguard-rules.pro << 'EOL'
+          # Flutter Wrapper
+          -keep class io.flutter.app.** { *; }
+          -keep class io.flutter.plugin.**  { *; }
+          -keep class io.flutter.util.**  { *; }
+          -keep class io.flutter.view.**  { *; }
+          -keep class io.flutter.**  { *; }
+          -keep class io.flutter.plugins.**  { *; }
+          -keep class io.flutter.plugin.editing.** { *; }
+          
+          # QR Scanner packages
+          -keep class net.sourceforge.zbar.** { *; }
+          -keep class com.google.mlkit.** { *; }
+          -keep class com.google.android.gms.** { *; }
+          
+          # Android ID
+          -keep class androidx.core.** { *; }
+          
+          # Camera
+          -keep class androidx.camera.** { *; }
+          
+          # Don't obfuscate model classes
+          -keep class com.advantage.crf_android.models.** { *; }
           EOL
           
-          # Buat build.gradle untuk app dengan konfigurasi yang benar
-          cat > android/app/build.gradle << 'EOL'
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withReader('UTF-8') { reader ->
-                  localProperties.load(reader)
-              }
-          }
+          # Build APK dengan verbose mode
+          echo "Building APK with verbose mode..."
+          flutter build apk --debug -v
           
-          def flutterRoot = localProperties.getProperty('flutter.sdk')
-          if (flutterRoot == null) {
-              throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
-          }
-          
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-          if (flutterVersionCode == null) {
-              flutterVersionCode = '1'
-          }
-          
-          def flutterVersionName = localProperties.getProperty('flutter.versionName')
-          if (flutterVersionName == null) {
-              flutterVersionName = '1.0'
-          }
-          
-          apply plugin: 'com.android.application'
-          apply plugin: 'kotlin-android'
-          apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
-          
-          android {
-              compileSdkVersion 31
-          
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_1_8
-                  targetCompatibility JavaVersion.VERSION_1_8
-              }
-          
-              kotlinOptions {
-                  jvmTarget = '1.8'
-              }
-          
-              sourceSets {
-                  main.java.srcDirs += 'src/main/kotlin'
-              }
-          
-              defaultConfig {
-                  applicationId "com.advantage.crf_android"
-                  minSdkVersion 21
-                  targetSdkVersion 31
-                  versionCode flutterVersionCode.toInteger()
-                  versionName flutterVersionName
-              }
-          
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.debug
-                  }
-              }
-          }
-          
-          flutter {
-              source '../..'
-          }
-          
-          dependencies {
-              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.6.10"
-          }
-          EOL
-          
-          # Buat build.gradle root
-          cat > android/build.gradle << 'EOL'
-          buildscript {
-              ext.kotlin_version = '1.6.10'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:7.0.2'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
-          }
-          
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-          
-          tasks.register("clean", Delete) {
-              delete rootProject.buildDir
-          }
-          EOL
+
           
           # Buat settings.gradle
           cat > android/settings.gradle << 'EOL'
