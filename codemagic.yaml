@@ -492,9 +492,11 @@ workflows:
               echo "Free disk space:"
               df -h
               echo "Memory usage:"
-              free -m
+              vm_stat
+              echo "Process memory info:"
+              ps -m
               echo "Top processes:"
-              top -b -n 1
+              ps -eo pid,ppid,user,%cpu,%mem,vsz,rss,stat,start,time,command | head -10
               exit 1
             fi
           elif [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
@@ -519,11 +521,13 @@ workflows:
               echo "Free disk space:"
               df -h
               echo "Memory usage:"
-              free -m
+              vm_stat
+              echo "Process memory info:"
+              ps -m
               echo "Top processes:"
-              top -b -n 1
+              ps -eo pid,ppid,user,%cpu,%mem,vsz,rss,stat,start,time,command | head -10
               exit 1
             fi
           fi
     artifacts:
-      - build/app/outputs/flutter-apk/app-debug.apk 
+      - build/app/outputs/flutter-apk/app-debug.apk
