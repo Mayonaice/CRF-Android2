@@ -1,8 +1,8 @@
 workflows:
   android-build:
     name: Android Debug Build
-    max_build_duration: 60
-    instance_type: mac_mini_m1
+    max_build_duration: 90
+    instance_type: mac_mini_m2
     environment:
       flutter: 3.13.9 # Menggunakan versi Flutter yang lebih baru dan stabil
       java: 11 # Menggunakan Java 11 untuk kompatibilitas dengan Gradle 7.0.2
@@ -471,15 +471,35 @@ workflows:
           }
           EOL
           
-          # Build APK dengan timeout dan opsi tambahan
-          echo "Building APK dengan timeout..."
-          timeout 45m flutter build apk --debug -v --no-tree-shake-icons
+          # Tambahkan logging lebih detail untuk membantu diagnosa
+          echo "=== FLUTTER DOCTOR VERBOSE ==="
+          flutter doctor -v
+          echo "=== FLUTTER CONFIG ==="
+          flutter config
+          echo "=== FLUTTER DEVICES ==="
+          flutter devices
           
-          # Cek hasil build atau gunakan fallback ke Gradle langsung jika timeout
+          # Build APK dengan pendekatan yang lebih sederhana dan logging detail
+          echo "=== BUILDING APK (BASIC APPROACH) ==="
+          flutter build apk --debug --verbose
+          
+          # Cek hasil build dan gunakan pendekatan alternatif jika gagal
           BUILD_RESULT=$?
-          if [ $BUILD_RESULT -eq 124 ] || [ $BUILD_RESULT -ne 0 ]; then
-            echo "⚠️ Flutter build failed or timed out. Trying direct Gradle build..."
-            cd android && ./gradlew --stop && ./gradlew clean && ./gradlew assembleDebug --info --stacktrace --scan
+          if [ $BUILD_RESULT -ne 0 ]; then
+            echo "⚠️ Flutter build failed with code $BUILD_RESULT. Trying alternative approach..."
+            
+            echo "=== FLUTTER CLEAN ==="
+            flutter clean
+            
+            echo "=== FLUTTER PUB GET (RETRY) ==="
+            flutter pub get
+            
+            echo "=== BUILDING APK (ALTERNATIVE APPROACH) ==="
+            flutter build apk --debug --split-debug-info=build/debug-info
+            
+            if [ $? -ne 0 ]; then
+              echo "⚠️ Flutter build still failed. Trying direct Gradle build..."
+              cd android && ./gradlew --info assembleDebug
             
             if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
               echo "✅ APK build berhasil dengan Gradle langsung!"
@@ -530,4 +550,4 @@ workflows:
             fi
           fi
     artifacts:
-      - build/app/outputs/flutter-apk/app-debug.apk
+      - build/app/outputs/flutter-apk/app-debug.apk 
