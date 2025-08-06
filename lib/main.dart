@@ -16,6 +16,7 @@ import 'screens/konsol_mode_screen.dart';
 import 'screens/konsol_data_return_screen.dart';
 import 'screens/konsol_data_pengurangan_screen.dart';
 import 'screens/konsol_data_closing_screen.dart';
+import 'screens/konsol_data_closing_form_screen.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io' show Platform;
@@ -350,6 +351,7 @@ class _CrfAppState extends State<CrfApp> {
           '/konsol_data_return': (context) => const KonsolDataReturnPage(),
           '/konsol_data_pengurangan': (context) => const KonsolDataPenguranganPage(),
           '/konsol_data_closing': (context) => const KonsolDataClosingPage(),
+          '/konsol_data_closing_form': (context) => const KonsolDataClosingFormScreen(),
         },
       ),
     );

@@ -8,6 +8,7 @@ import 'tl_home_page.dart';
 import '../services/auth_service.dart';
 import '../services/device_service.dart';
 import '../widgets/error_dialogs.dart';
+import '../widgets/custom_modals.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -133,8 +134,20 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // Flags to track modal and input states
+  bool _isModalShowing = false;
+  bool _inputChangedAfterModal = false;
+
   // Auto-fetch branches when all 3 fields are filled
   void _onFieldChanged() {
+    // Mark that input has changed
+    _inputChangedAfterModal = true;
+    
+    // If a modal is currently showing, don't try to fetch branches
+    if (_isModalShowing) {
+      return;
+    }
+
     // Check if all 3 fields have content
     if (_usernameController.text.isNotEmpty &&
         _passwordController.text.isNotEmpty &&
@@ -153,7 +166,8 @@ class _LoginPageState extends State<LoginPage> {
         if (_usernameController.text.isNotEmpty &&
             _passwordController.text.isNotEmpty &&
             _noMejaController.text.isNotEmpty &&
-            !_isLoadingBranches) {
+            !_isLoadingBranches &&
+            !_isModalShowing) {
           _fetchBranches();
         }
       });
@@ -170,7 +184,7 @@ class _LoginPageState extends State<LoginPage> {
 
   // Fetch available branches
   Future<void> _fetchBranches() async {
-    if (_isLoadingBranches) return;
+    if (_isLoadingBranches || _isModalShowing) return;
     
     setState(() {
       _isLoadingBranches = true;
@@ -204,11 +218,41 @@ class _LoginPageState extends State<LoginPage> {
           HapticFeedback.lightImpact();
         }
       } else {
-        // Clear branches on error but don't show popup yet (user might still be typing)
+        // Clear branches on error
         setState(() {
           _availableBranches.clear();
           _selectedBranch = null;
         });
+        
+        // Show error modal if it's not just empty fields
+        if (_usernameController.text.isNotEmpty && 
+            _passwordController.text.isNotEmpty && 
+            _noMejaController.text.isNotEmpty) {
+          // Set flag to prevent multiple modals
+          _isModalShowing = true;
+          
+          await CustomModals.showFailedModal(
+            context: context,
+            message: result['message'] ?? 'Tidak dapat menemukan cabang untuk user ini. Periksa kembali username, password, dan nomor meja.',
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Reset flag when modal is closed
+              _isModalShowing = false;
+              // Reset input changed flag
+              _inputChangedAfterModal = false;
+              
+              // Schedule a check to fetch branches again if input has changed
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (_inputChangedAfterModal && 
+                    _usernameController.text.isNotEmpty &&
+                    _passwordController.text.isNotEmpty &&
+                    _noMejaController.text.isNotEmpty) {
+                  _fetchBranches();
+                }
+              });
+            },
+          );
+        }
       }
     } catch (e) {
       // Clear branches on error
@@ -216,6 +260,29 @@ class _LoginPageState extends State<LoginPage> {
         _availableBranches.clear();
         _selectedBranch = null;
       });
+      
+      // Show error modal for connection issues
+      if (_usernameController.text.isNotEmpty && 
+          _passwordController.text.isNotEmpty && 
+          _noMejaController.text.isNotEmpty) {
+        // Set flag to prevent multiple modals
+        _isModalShowing = true;
+        
+        await CustomModals.showFailedModal(
+          context: context,
+          message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.',
+          buttonText: 'Coba Lagi',
+          onPressed: () {
+            Navigator.of(context).pop();
+            // Reset flag when modal is closed
+            _isModalShowing = false;
+            // Reset input changed flag
+            _inputChangedAfterModal = false;
+            // Try again
+            _fetchBranches();
+          },
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -227,27 +294,49 @@ class _LoginPageState extends State<LoginPage> {
 
   // Modify _performLogin to handle test mode
   Future<void> _performLogin() async {
+    // Don't proceed if a modal is already showing
+    if (_isModalShowing) {
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
      
     if (_availableBranches.isEmpty) {
-      ErrorDialogs.showErrorDialog(
-        context,
-        title: 'Tidak Ada Akses',
+      _isModalShowing = true;
+      await CustomModals.showFailedModal(
+        context: context,
         message: 'Pastikan semua field sudah benar. Tidak ada cabang CRF yang tersedia untuk user ini.',
-        icon: Icons.business_outlined,
+        onPressed: () {
+          Navigator.of(context).pop();
+          _isModalShowing = false;
+          _inputChangedAfterModal = false;
+          
+          // Schedule a check to fetch branches again if input has changed
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (_inputChangedAfterModal && 
+                _usernameController.text.isNotEmpty &&
+                _passwordController.text.isNotEmpty &&
+                _noMejaController.text.isNotEmpty) {
+              _fetchBranches();
+            }
+          });
+        },
       );
       return;
     }
      
     if (_selectedBranch == null && _availableBranches.length > 1) {
-      ErrorDialogs.showErrorDialog(
-        context,
-        title: 'Pilih Cabang',
+      _isModalShowing = true;
+      await CustomModals.showFailedModal(
+        context: context,
         message: 'Silahkan pilih cabang untuk melanjutkan login.',
-        icon: Icons.location_on_outlined,
-        iconColor: Colors.orange,
+        onPressed: () {
+          Navigator.of(context).pop();
+          _isModalShowing = false;
+          _inputChangedAfterModal = false;
+        },
       );
       return;
     }
@@ -279,14 +368,16 @@ class _LoginPageState extends State<LoginPage> {
        
       if (result['success']) {
         HapticFeedback.mediumImpact();
-         
-        ErrorDialogs.showSuccessDialog(
-          context,
-          title: 'Login Berhasil!',
+        
+        _isModalShowing = true;
+        await CustomModals.showSuccessModal(
+          context: context,
           message: 'Selamat datang di aplikasi CRF',
           buttonText: 'Lanjutkan',
           onPressed: () async {
-            Navigator.pop(context);
+            Navigator.pop(context); // Close modal
+            _isModalShowing = false;
+            _inputChangedAfterModal = false;
             if (mounted) {
               // Check user role and navigate accordingly
               final userData = await _authService.getUserData();
@@ -327,35 +418,74 @@ class _LoginPageState extends State<LoginPage> {
           },
         );
       } else {
+        _isModalShowing = true;
         if (result['errorType'] == 'ANDROID_ID_ERROR') {
-          ErrorDialogs.showErrorDialog(
-            context,
-            title: 'AndroidID Tidak Terdaftar',
+          await CustomModals.showFailedModal(
+            context: context,
             message: result['message'] ?? 'AndroidID belum terdaftar, silahkan hubungi tim COMSEC',
-            icon: Icons.phone_android,
-            iconColor: Colors.orange,
+            onPressed: () {
+              Navigator.of(context).pop();
+              _isModalShowing = false;
+              _inputChangedAfterModal = false;
+              
+              // Schedule a check to fetch branches again if input has changed
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (_inputChangedAfterModal && 
+                    _usernameController.text.isNotEmpty &&
+                    _passwordController.text.isNotEmpty &&
+                    _noMejaController.text.isNotEmpty) {
+                  _fetchBranches();
+                }
+              });
+            },
           );
         } else if (result['message']?.toString().contains('Connection error') == true ||
                    result['message']?.toString().contains('Timeout') == true) {
-          ErrorDialogs.showConnectionErrorDialog(
-            context,
+          await CustomModals.showFailedModal(
+            context: context,
             message: result['message'] ?? 'Koneksi ke server bermasalah',
-            onRetry: _performLogin,
+            buttonText: 'Coba Lagi',
+            onPressed: () {
+              Navigator.of(context).pop();
+              _isModalShowing = false;
+              _inputChangedAfterModal = false;
+              _performLogin();
+            },
           );
         } else {
-          ErrorDialogs.showErrorDialog(
-            context,
-            title: 'Login Gagal',
+          await CustomModals.showFailedModal(
+            context: context,
             message: result['message'] ?? 'Username atau password tidak valid',
-            icon: Icons.login_outlined,
+            onPressed: () {
+              Navigator.of(context).pop();
+              _isModalShowing = false;
+              _inputChangedAfterModal = false;
+              
+              // Schedule a check to fetch branches again if input has changed
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (_inputChangedAfterModal && 
+                    _usernameController.text.isNotEmpty &&
+                    _passwordController.text.isNotEmpty &&
+                    _noMejaController.text.isNotEmpty) {
+                  _fetchBranches();
+                }
+              });
+            },
           );
         }
       }
     } catch (e) {
-      ErrorDialogs.showConnectionErrorDialog(
-        context,
+      _isModalShowing = true;
+      await CustomModals.showFailedModal(
+        context: context,
         message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.',
-        onRetry: _performLogin,
+        buttonText: 'Coba Lagi',
+        onPressed: () {
+          Navigator.of(context).pop();
+          _isModalShowing = false;
+          _inputChangedAfterModal = false;
+          _performLogin();
+        },
       );
     } finally {
       if (mounted) {

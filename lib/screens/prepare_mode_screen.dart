@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../widgets/barcode_scanner_widget.dart';
 import '../widgets/qr_code_generator_widget.dart';
+import '../widgets/custom_modals.dart';
 import 'dart:async';
 
 class PrepareModePage extends StatefulWidget {
@@ -21,6 +22,9 @@ class _PrepareModePageState extends State<PrepareModePage> {
   // API service
   final ApiService _apiService = ApiService();
   final AuthService _authService = AuthService();
+  String _userName = '';
+  String _branchName = '';
+  String _userId = '';
   
   // Data from API
   ATMPrepareReplenishData? _prepareData;
@@ -78,6 +82,9 @@ class _PrepareModePageState extends State<PrepareModePage> {
       DeviceOrientation.landscapeRight,
     ]);
     
+    // Load user data
+    _loadUserData();
+    
     // Initialize with one empty catridge
     _initializeCatridgeControllers(1);
     
@@ -87,6 +94,23 @@ class _PrepareModePageState extends State<PrepareModePage> {
     // Add listeners to text fields to auto-hide approval form
     _idCRFController.addListener(_checkAndHideApprovalForm);
     _jamMulaiController.addListener(_checkAndHideApprovalForm);
+  }
+  
+  // Load user data from login
+  Future<void> _loadUserData() async {
+    try {
+      final userData = await _authService.getUserData();
+      if (userData != null) {
+        setState(() {
+          _userName = userData['userName'] ?? userData['name'] ?? '';
+          _userId = userData['userId'] ?? userData['userID'] ?? '';
+          _branchName = userData['branchName'] ?? userData['branch'] ?? '';
+        });
+        debugPrint('🔍 User data loaded - UserName: $_userName, UserID: $_userId');
+      }
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
+    }
   }
 
   @override
@@ -1485,180 +1509,221 @@ class _PrepareModePageState extends State<PrepareModePage> {
   }
 
   Widget _buildHeader(BuildContext context, bool isSmallScreen) {
+    final isTablet = MediaQuery.of(context).size.width >= 768;
+    
     return Container(
+      height: isTablet ? 80 : 70,
       padding: EdgeInsets.symmetric(
-        horizontal: isSmallScreen ? 8.0 : 16.0, 
-        vertical: isSmallScreen ? 4.0 : 8.0
+        horizontal: isTablet ? 32.0 : 24.0,
+        vertical: isTablet ? 16.0 : 12.0,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black12,
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 4,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         children: [
-          // Back button
-          IconButton(
-            icon: Icon(
-              Icons.arrow_back, 
-              color: Colors.red, 
-              size: isSmallScreen ? 20 : 30
+          // Menu button - Green hamburger icon
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: isTablet ? 48 : 40,
+              height: isTablet ? 48 : 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFF10B981),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.menu,
+                color: Colors.white,
+                size: 24,
+              ),
             ),
-            padding: EdgeInsets.zero,
-            constraints: BoxConstraints(minWidth: isSmallScreen ? 32 : 48),
-            onPressed: () => Navigator.of(context).pop(),
           ),
-          
-          SizedBox(width: isSmallScreen ? 4 : 8),
+          SizedBox(width: isTablet ? 20 : 16),
           
           // Title
           Text(
             'Prepare Mode',
             style: TextStyle(
-              fontSize: isSmallScreen ? 16 : 22,
+              fontSize: isTablet ? 28 : 24,
               fontWeight: FontWeight.bold,
+              color: Colors.black,
+              letterSpacing: -0.5,
             ),
           ),
           
           const Spacer(),
           
-          // Location and user info - For small screens, show minimal info
-          if (isSmallScreen)
-            // Compact header for small screens
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'JAKARTA-CIDENG',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
+          // Location info
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _branchName,
+                style: TextStyle(
+                  fontSize: isTablet ? 18 : 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                  letterSpacing: 0.5,
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Meja: 010101',
-                      style: TextStyle(fontSize: 8),
-                    ),
-                    SizedBox(width: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade100,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'CRF_OPR',
-                        style: TextStyle(
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            )
-          else
-            // Full header for larger screens
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'JAKARTA-CIDENG',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Meja : 010101',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              Container(
+                width: isTablet ? 100 : 80,
+                child: FutureBuilder<Map<String, dynamic>?>(
+                  future: _authService.getUserData(),
+                  builder: (context, snapshot) {
+                    String meja = '';
+                    if (snapshot.hasData && snapshot.data != null) {
+                      meja = snapshot.data!['noMeja'] ?? 
+                            snapshot.data!['NoMeja'] ?? 
+                            '010101';
+                    } else {
+                      meja = '010101';
+                    }
+                    return Text(
+                      'Meja: $meja',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: isTablet ? 16 : 14,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF6B7280),
                       ),
-                    ),
-                    const SizedBox(width: 20),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade100,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text(
-                        'CRF_OPR',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    );
+                  },
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
           
-          SizedBox(width: isSmallScreen ? 4 : 16),
+          SizedBox(width: isTablet ? 24 : 20),
           
-          // User avatar and info - Simplified for small screens
-          if (isSmallScreen)
-            // Just show avatar for small screens
-            CircleAvatar(
-              radius: 12,
-              backgroundColor: Colors.grey.shade200,
-              backgroundImage: const AssetImage('assets/images/user.jpg'),
-              onBackgroundImageError: (exception, stackTrace) {},
-            )
-          else
-            // Full user info for larger screens
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Colors.grey.shade200,
-                    backgroundImage: const AssetImage('assets/images/user.jpg'),
-                    onBackgroundImageError: (exception, stackTrace) {},
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Lorenzo Putra',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '9180812021',
-                      style: TextStyle(
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+          // CRF_KONSOL button
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isTablet ? 20 : 16,
+              vertical: isTablet ? 12 : 10,
             ),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981),
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: Text(
+              'CRF_KONSOL',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isTablet ? 16 : 14,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          
+          SizedBox(width: isTablet ? 16 : 12),
+          
+          // Refresh button
+          GestureDetector(
+            onTap: () {
+              // Refresh data when clicked
+              setState(() {
+                _prepareData = null;
+                _detailCatridgeItems.clear();
+                _idCRFController.clear();
+                _setCurrentTime();
+              });
+            },
+            child: Container(
+              width: isTablet ? 44 : 40,
+              height: isTablet ? 44 : 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFF10B981),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.refresh,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          ),
+          
+          SizedBox(width: isTablet ? 24 : 20),
+          
+          // User info
+          Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    constraints: BoxConstraints(maxWidth: isTablet ? 150 : 120),
+                    child: Text(
+                      _userName,
+                      style: TextStyle(
+                        fontSize: isTablet ? 18 : 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: _authService.getUserData(),
+                    builder: (context, snapshot) {
+                      String nik = '';
+                      if (snapshot.hasData && snapshot.data != null) {
+                                                  nik = snapshot.data!['userId'] ?? 
+                                snapshot.data!['userID'] ?? 
+                                '';
+                        } else {
+                          nik = _userId;
+                      }
+                      return Text(
+                        nik,
+                        style: TextStyle(
+                          fontSize: isTablet ? 14 : 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              SizedBox(width: isTablet ? 12 : 10),
+              Container(
+                width: isTablet ? 48 : 44,
+                height: isTablet ? 48 : 44,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF10B981),
+                  shape: BoxShape.circle,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Container(
+                    color: const Color(0xFF10B981),
+                    child: const Icon(
+                      Icons.person,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -2448,41 +2513,28 @@ class _PrepareModePageState extends State<PrepareModePage> {
     );
   }
   
-  // Build Approval TL Supervisor form
+  // Build Approval TL Supervisor form sesuai design baru
   Widget _buildApprovalForm(bool isSmallScreen) {
     return Container(
       margin: EdgeInsets.only(bottom: isSmallScreen ? 15 : 25, top: isSmallScreen ? 10 : 15),
       padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
       decoration: BoxDecoration(
-        color: Colors.green.shade50,
-        border: Border.all(color: Colors.green.shade300),
+        color: Colors.white,
+        border: Border.all(color: Colors.grey.shade300),
         borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.green.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // Header - sesuai design baru
           Row(
             children: [
-              Icon(
-                Icons.security,
-                color: Colors.green.shade700,
-                size: isSmallScreen ? 20 : 24,
-              ),
-              SizedBox(width: 8),
               Text(
                 'Approval TL Supervisor',
                 style: TextStyle(
-                  fontSize: isSmallScreen ? 14 : 18,
+                  fontSize: isSmallScreen ? 16 : 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.green.shade700,
+                  color: Colors.green,
                 ),
               ),
             ],
@@ -2511,32 +2563,35 @@ class _PrepareModePageState extends State<PrepareModePage> {
           
           SizedBox(height: isSmallScreen ? 16 : 20),
           
-          // OR Divider
+          // OR Divider - sesuai design baru
           Row(
             children: [
-              Expanded(child: Divider(color: Colors.green.shade300)),
+              Expanded(child: Divider(color: Colors.grey.shade400)),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
                   'ATAU',
                   style: TextStyle(
-                    fontSize: isSmallScreen ? 10 : 12,
+                    fontSize: isSmallScreen ? 12 : 14,
                     fontWeight: FontWeight.bold,
-                    color: Colors.green.shade600,
+                    color: Colors.grey.shade600,
                   ),
                 ),
               ),
-              Expanded(child: Divider(color: Colors.green.shade300)),
+              Expanded(child: Divider(color: Colors.grey.shade400)),
             ],
           ),
           
           SizedBox(height: isSmallScreen ? 12 : 16),
           
-          // QR Code Generator Section
-          QRCodeGeneratorWidget(
-            action: 'PREPARE',
-            idTool: _prepareData?.id?.toString() ?? _idCRFController.text,
-            catridgeData: _prepareCatridgeQRData(),
+          // QR Code Generator Section - pindah ke bawah form
+          SizedBox(height: isSmallScreen ? 16 : 20),
+          Center(
+            child: QRCodeGeneratorWidget(
+              action: 'PREPARE',
+              idTool: _prepareData?.id?.toString() ?? _idCRFController.text,
+              catridgeData: _prepareCatridgeQRData(),
+            ),
           ),
           
           SizedBox(height: isSmallScreen ? 16 : 20),
@@ -2609,7 +2664,7 @@ class _PrepareModePageState extends State<PrepareModePage> {
     );
   }
   
-  // Helper method to build approval form fields
+  // Helper method to build approval form fields - sesuai design baru
   Widget _buildApprovalField({
     required String label,
     required TextEditingController controller,
@@ -2623,46 +2678,34 @@ class _PrepareModePageState extends State<PrepareModePage> {
         Text(
           label,
           style: TextStyle(
-            fontSize: isSmallScreen ? 12 : 14,
+            fontSize: isSmallScreen ? 14 : 16,
             fontWeight: FontWeight.bold,
-            color: Colors.green.shade700,
+            color: Colors.black87,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Container(
-          height: isSmallScreen ? 36 : 40,
           decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: Colors.green.shade300),
-            borderRadius: BorderRadius.circular(4),
+            border: Border(bottom: BorderSide(color: Colors.grey.shade400)),
           ),
-          child: Row(
-            children: [
-              SizedBox(width: 12),
-              Icon(
-                icon,
-                size: isSmallScreen ? 16 : 18,
-                color: Colors.green.shade600,
+          child: TextField(
+            controller: controller,
+            obscureText: isPassword,
+            enabled: !_isSubmitting,
+            style: TextStyle(fontSize: isSmallScreen ? 14 : 16),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              suffixIcon: isPassword 
+                ? Icon(Icons.visibility, color: Colors.grey) 
+                : Icon(Icons.person_outline, color: Colors.grey),
+              hintText: isPassword ? '••••••••••' : '',
+              hintStyle: TextStyle(
+                color: Colors.grey.shade400,
+                fontSize: isSmallScreen ? 14 : 16,
               ),
-              SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  obscureText: isPassword,
-                  enabled: !_isSubmitting,
-                  style: TextStyle(fontSize: isSmallScreen ? 12 : 14),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: isPassword ? '••••••••••' : 'Enter $label',
-                    hintStyle: TextStyle(
-                      color: Colors.grey.shade400,
-                      fontSize: isSmallScreen ? 12 : 14,
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(width: 12),
-            ],
+            ),
           ),
         ),
       ],
@@ -3823,26 +3866,13 @@ class _PrepareModePageState extends State<PrepareModePage> {
     }
   }
 
-  // Show error dialog
+  // Show error dialog using CustomModals
   void _showErrorDialog(String message) {
     if (!mounted) return;
     
-    showDialog(
+    CustomModals.showFailedModal(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Error'),
-          content: Text(message),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('OK'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
+      message: message,
     );
   }
 

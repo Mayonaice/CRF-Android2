@@ -228,6 +228,14 @@ class AuthService {
         userData['branchCode'] = selectedBranch;
       }
       
+      // Ensure noMeja is included in userData
+      if (!userData.containsKey('noMeja') && noMeja.isNotEmpty) {
+        userData['noMeja'] = noMeja;
+        debugPrint('🔍 Added noMeja to userData: $noMeja');
+      } else {
+        debugPrint('🔍 noMeja already in userData: ${userData['noMeja']}');
+      }
+      
       // Tambahkan username dan password untuk QR code jika role adalah CRF_TL
       final userRole = userData['role']?.toString().toUpperCase() ?? 
                       userData['roleID']?.toString().toUpperCase();

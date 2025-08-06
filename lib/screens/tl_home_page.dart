@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
+import '../services/profile_service.dart';
+import '../widgets/face_recognition_widget.dart';
+import '../widgets/qr_code_scanner_tl_widget.dart';
 import 'tl_device_info_screen.dart';
 import 'tl_qr_scanner_screen.dart';
 import 'tl_profile_screen.dart';
@@ -15,8 +18,9 @@ class TLHomePage extends StatefulWidget {
 class _TLHomePageState extends State<TLHomePage> {
   int _selectedIndex = 1; // Default to middle tab (Approve TLSPV)
   final AuthService _authService = AuthService();
-  String _userName = 'Lorenzo Putra';
-  String _branchName = 'JAKARTA - CIDENG';
+  final ProfileService _profileService = ProfileService();
+  String _userName = '';
+  String _branchName = '';
 
   @override
   void initState() {
@@ -88,7 +92,7 @@ class _TLHomePageState extends State<TLHomePage> {
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          // Profile Photo
+          // Profile Photo - using API
           Container(
             width: 60,
             height: 60,
@@ -96,10 +100,34 @@ class _TLHomePageState extends State<TLHomePage> {
               shape: BoxShape.circle,
               color: Colors.brown[300],
             ),
-            child: const Icon(
-              Icons.person,
-              color: Colors.white,
-              size: 30,
+            child: ClipOval(
+              child: FutureBuilder<ImageProvider>(
+                future: _profileService.getProfilePhoto(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.done && 
+                      snapshot.hasData) {
+                    return Image(
+                      image: snapshot.data!,
+                      fit: BoxFit.cover,
+                      width: 60,
+                      height: 60,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(
+                          Icons.person,
+                          color: Colors.white,
+                          size: 30,
+                        );
+                      },
+                    );
+                  } else {
+                    return const Icon(
+                      Icons.person,
+                      color: Colors.white,
+                      size: 30,
+                    );
+                  }
+                },
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -359,7 +387,7 @@ class _TLHomePageState extends State<TLHomePage> {
                 index: 1,
                 isCenter: true,
                 onTap: () {
-                  Navigator.of(context).pushNamed('/tl_qr_scanner');
+                  _showFaceRecognition();
                 },
               ),
               // Profile
@@ -435,6 +463,97 @@ class _TLHomePageState extends State<TLHomePage> {
         ),
       ),
     );
+  }
+
+  // Show face recognition dialog before opening scanner
+  Future<void> _showFaceRecognition() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Face Authentication',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 400,
+                  child: FaceRecognitionWidget(
+                    onAuthenticationSuccess: () {
+                      // Close dialog and open QR scanner directly
+                      Navigator.of(context).pop();
+                      _openQRScanner();
+                    },
+                    onAuthenticationFailed: () {
+                      // Close dialog and show error message
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Face authentication failed. Please try again.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Open QR scanner directly without intermediate screen
+  Future<void> _openQRScanner() async {
+    // Set to portrait mode before scanning
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    
+    // Use the QR scanner widget directly
+    final String? qrResult = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => QRCodeScannerTLWidget(
+          title: 'Scan QR Code',
+          onBarcodeDetected: (code) {
+            print('🔍 QR Code detected in scanner: ${code.length > 20 ? code.substring(0, 20) + "..." : code}');
+          },
+          fieldKey: 'qrcode',
+          fieldLabel: 'Approval QR',
+        ),
+      ),
+    );
+    
+    // Reset orientation to portrait for this screen
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    
+    // Process QR result if available
+    if (qrResult != null && qrResult.isNotEmpty) {
+      // Navigate to TLQRScannerScreen with the result for processing
+      Navigator.pushNamed(
+        context, 
+        '/tl_qr_scanner',
+        arguments: {'qrResult': qrResult},
+      );
+    }
   }
 
   @override

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../services/auth_service.dart';
+import '../services/return_api_service.dart';
+import '../models/return_data_model.dart';
+import 'edit_return_screen.dart';
 
 class KonsolDataReturnPage extends StatefulWidget {
   const KonsolDataReturnPage({super.key});
@@ -16,9 +19,19 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
   String searchQuery = '';
   String? typeReturn;
   final AuthService _authService = AuthService();
-  String _userName = 'Lorenzo Putra'; // Default value
-  String _branchName = 'JAKARTA-CIDENG'; // Default value
-  String _nik = '9190812021'; // Default value
+  final ReturnApiService _returnApiService = ReturnApiService();
+  String _userName = ''; 
+  String _branchName = '';
+  String _userId = '';
+  String _branchCode = '';
+  
+  // List to store return data from API
+  List<ReturnData> _returnDataList = [];
+  bool _isLoading = false;
+  String _errorMessage = '';
+  
+  // Selected return data
+  ReturnData? _selectedReturnData;
 
   @override
   void initState() {
@@ -28,6 +41,7 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
       DeviceOrientation.landscapeRight,
     ]);
     _loadUserData();
+    _loadReturnData();
   }
 
   // Load user data from login
@@ -36,14 +50,93 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
       final userData = await _authService.getUserData();
       if (userData != null) {
         setState(() {
-          _userName = userData['userName'] ?? userData['userID'] ?? userData['name'] ?? 'Lorenzo Putra';
-          _branchName = userData['branchName'] ?? userData['branch'] ?? 'JAKARTA-CIDENG';
-          _nik = userData['nik'] ?? userData['NIK'] ?? '9190812021';
+          _userName = userData['userName'] ?? userData['name'] ?? '';
+          _userId = userData['userId'] ?? userData['userID'] ?? '';
+          _branchName = userData['branchName'] ?? userData['branch'] ?? '';
+          _branchCode = userData['groupId'] ?? userData['branchCode'] ?? '1'; // Menggunakan groupId
         });
+        debugPrint('🔍 User data loaded - Branch Code: $_branchCode, UserName: $_userName, UserID: $_userId');
       }
     } catch (e) {
       debugPrint('Error loading user data: $e');
     }
+  }
+  
+  // Load return data from API
+  Future<void> _loadReturnData() async {
+    // Pastikan user data sudah dimuat terlebih dahulu
+    if (_branchCode.isEmpty) {
+      await _loadUserData();
+    }
+    
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+    
+    try {
+      // Selalu gunakan branch code untuk filter data
+      debugPrint('🔍 Fetching return data with BranchCode: $_branchCode');
+      final returnData = await _returnApiService.getReturnList(
+        branchCode: _branchCode
+      );
+      
+      setState(() {
+        _returnDataList = returnData;
+        _isLoading = false;
+      });
+      
+      debugPrint('🔍 Loaded ${returnData.length} return data items');
+      
+      // Filter data based on current date range
+      _filterAndUpdateData();
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load return data: $e';
+        _isLoading = false;
+      });
+      debugPrint('Error loading return data: $e');
+    }
+  }
+  
+  // Filter return data based on date range
+  List<ReturnData> _filteredData = [];
+  
+  void _filterAndUpdateData() {
+    if (_returnDataList.isEmpty) {
+      setState(() {
+        _filteredData = [];
+      });
+      return;
+    }
+    
+    final filtered = _returnDataList.where((data) {
+      // Parse TglPrepare date
+      if (data.tglPrepare == null) return false;
+      
+      DateTime? prepareDate;
+      try {
+        prepareDate = DateTime.parse(data.tglPrepare!);
+      } catch (e) {
+        return false;
+      }
+      
+      // Check if date is within range
+      final inRange = (prepareDate.isAfter(fromDate.subtract(const Duration(days: 1))) || 
+                      prepareDate.isAtSameMomentAs(fromDate)) && 
+                      (prepareDate.isBefore(toDate.add(const Duration(days: 1))) || 
+                      prepareDate.isAtSameMomentAs(toDate));
+      
+      return inRange;
+    }).toList();
+    
+    setState(() {
+      _filteredData = filtered;
+    });
+  }
+  
+  List<ReturnData> get filteredReturnData {
+    return _filteredData;
   }
 
   @override
@@ -111,20 +204,20 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
       ),
       child: Row(
         children: [
-          // Back button - Red triangle/arrow
+          // Menu button - Green hamburger icon
           GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
               width: isTablet ? 48 : 40,
               height: isTablet ? 48 : 40,
               decoration: const BoxDecoration(
-                color: Color(0xFFDC2626),
+                color: Color(0xFF10B981),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.arrow_back_ios,
+                Icons.menu,
                 color: Colors.white,
-                size: 20,
+                size: 24,
               ),
             ),
           ),
@@ -156,13 +249,33 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
                   color: Colors.black,
                   letterSpacing: 0.5,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
-              Text(
-                'Meja : 010101',
-                style: TextStyle(
-                  fontSize: isTablet ? 16 : 14,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF6B7280),
+              Container(
+                width: isTablet ? 100 : 80,
+                child: FutureBuilder<Map<String, dynamic>?>(
+                  future: _authService.getUserData(),
+                  builder: (context, snapshot) {
+                    String meja = '';
+                    if (snapshot.hasData && snapshot.data != null) {
+                      meja = snapshot.data!['noMeja'] ?? 
+                            snapshot.data!['NoMeja'] ?? 
+                            '010101';
+                    } else {
+                      meja = '010101';
+                    }
+                    return Text(
+                      'Meja: $meja',
+                      style: TextStyle(
+                        fontSize: isTablet ? 16 : 14,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF6B7280),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    );
+                  },
                 ),
               ),
             ],
@@ -194,17 +307,22 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
           SizedBox(width: isTablet ? 16 : 12),
           
           // Refresh button
-          Container(
-            width: isTablet ? 44 : 40,
-            height: isTablet ? 44 : 40,
-            decoration: const BoxDecoration(
-              color: Color(0xFF10B981),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.refresh,
-              color: Colors.white,
-              size: 22,
+          GestureDetector(
+            onTap: () {
+              _loadReturnData(); // Refresh data when clicked
+            },
+            child: Container(
+              width: isTablet ? 44 : 40,
+              height: isTablet ? 44 : 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFF10B981),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.refresh,
+                color: Colors.white,
+                size: 22,
+              ),
             ),
           ),
           
@@ -217,21 +335,39 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    _userName,
-                    style: TextStyle(
-                      fontSize: isTablet ? 18 : 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
+                  Container(
+                    constraints: BoxConstraints(maxWidth: isTablet ? 150 : 120),
+                    child: Text(
+                      _userName,
+                      style: TextStyle(
+                        fontSize: isTablet ? 18 : 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
-                  Text(
-                    _nik,
-                    style: TextStyle(
-                      fontSize: isTablet ? 14 : 12,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF6B7280),
-                    ),
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: _authService.getUserData(),
+                    builder: (context, snapshot) {
+                      String nik = '';
+                      if (snapshot.hasData && snapshot.data != null) {
+                                              nik = snapshot.data!['userId'] ?? 
+                            snapshot.data!['userID'] ?? 
+                            '';
+                      } else {
+                        nik = _userId;
+                      }
+                      return Text(
+                        nik,
+                        style: TextStyle(
+                          fontSize: isTablet ? 14 : 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -427,6 +563,7 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
               // From date
               _buildDateField(fromDate, isTablet, (date) {
                 setState(() => fromDate = date);
+                _filterAndUpdateData();
               }),
               
               SizedBox(width: isTablet ? 16 : 12),
@@ -446,6 +583,7 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
               // To date
               _buildDateField(toDate, isTablet, (date) {
                 setState(() => toDate = date);
+                _filterAndUpdateData();
               }),
               
               SizedBox(width: isTablet ? 32 : 24),
@@ -631,18 +769,116 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
               ),
             ),
             
-            // Empty table body
+            // Table body with data or loading indicator
             Expanded(
-              child: Center(
-                child: Text(
-                  'No data available',
-                  style: TextStyle(
-                    fontSize: isTablet ? 16 : 14,
-                    color: Colors.grey.shade500,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
+              child: _isLoading
+                ? Center(child: CircularProgressIndicator())
+                : _errorMessage.isNotEmpty
+                  ? Center(
+                      child: Text(
+                        _errorMessage,
+                        style: TextStyle(
+                          fontSize: isTablet ? 16 : 14,
+                          color: Colors.red,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    )
+                  : filteredReturnData.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No data available for selected date range',
+                          style: TextStyle(
+                            fontSize: isTablet ? 16 : 14,
+                            color: Colors.grey.shade500,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: filteredReturnData.length,
+                        itemBuilder: (context, index) {
+                          final data = filteredReturnData[index];
+                          final isSelected = _selectedReturnData?.id == data.id;
+                          
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _selectedReturnData = data;
+                              });
+                            },
+                            child: Container(
+                              color: isSelected ? Colors.blue.withOpacity(0.1) : null,
+                              child: Row(
+                                children: columns.map((column) {
+                                  String value = '';
+                                  switch (column) {
+                                    case 'Tanggal Return':
+                                      value = data.dateSTReturn ?? '-';
+                                      break;
+                                    case 'WSID':
+                                      value = data.atmCode;
+                                      break;
+                                    case 'Lokasi':
+                                      value = data.name;
+                                      break;
+                                    case 'A1':
+                                      value = '${data.a1 ?? 0}';
+                                      break;
+                                    case 'A2':
+                                      value = '${data.a2 ?? 0}';
+                                      break;
+                                    case 'A5':
+                                      value = '${data.a5 ?? 0}';
+                                      break;
+                                    case 'A10':
+                                      value = '${data.a10 ?? 0}';
+                                      break;
+                                    case 'A20':
+                                      value = '${data.a20 ?? 0}';
+                                      break;
+                                    case 'A50':
+                                      value = '${data.a50 ?? 0}';
+                                      break;
+                                    case 'A75':
+                                      value = '${data.a75 ?? 0}';
+                                      break;
+                                    case 'A100':
+                                      value = '${data.a100 ?? 0}';
+                                      break;
+                                    case 'Total Lembar':
+                                      value = '${data.tQty ?? 0}';
+                                      break;
+                                    case 'Total Value':
+                                      value = 'Rp ${NumberFormat('#,###').format(data.tValue ?? 0)}';
+                                      break;
+                                  }
+                                  
+                                  return Container(
+                                    width: columnWidths[column],
+                                    padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        right: BorderSide(color: Colors.grey.shade300),
+                                        bottom: BorderSide(color: Colors.grey.shade300),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      value,
+                                      style: TextStyle(
+                                        fontSize: isTablet ? 12 : 9,
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
             ),
           ],
         ),
@@ -656,39 +892,59 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Edit Data button
-          Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: isTablet ? 24 : 20,
-              vertical: isTablet ? 12 : 10,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.yellow.shade200,
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.edit,
-                  size: isTablet ? 20 : 18,
-                  color: Colors.black87,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'Edit Data',
-                  style: TextStyle(
-                    fontSize: isTablet ? 16 : 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+          GestureDetector(
+            onTap: _selectedReturnData != null 
+              ? () {
+                  // Navigate to edit page with selected data and refresh data on return
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EditReturnScreen(
+                        returnData: _selectedReturnData!,
+                      ),
+                    ),
+                  ).then((result) {
+                    // If returned with success result, refresh data
+                    if (result == true) {
+                      _loadReturnData();
+                    }
+                  });
+                }
+              : null,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isTablet ? 24 : 20,
+                vertical: isTablet ? 12 : 10,
+              ),
+              decoration: BoxDecoration(
+                color: _selectedReturnData != null ? Colors.yellow.shade200 : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: _selectedReturnData != null ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
                   ),
-                ),
-              ],
+                ] : null,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.edit,
+                    size: isTablet ? 20 : 18,
+                    color: _selectedReturnData != null ? Colors.black87 : Colors.grey.shade600,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Edit Data',
+                    style: TextStyle(
+                      fontSize: isTablet ? 16 : 14,
+                      fontWeight: FontWeight.bold,
+                      color: _selectedReturnData != null ? Colors.black87 : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           
@@ -709,33 +965,65 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
               // Denomination rows
               Row(
                 children: [
-                  _buildDenominationField('A100', isTablet),
+                  _buildDenominationField(
+                    'A100', 
+                    isTablet,
+                    value: _selectedReturnData != null ? '${_selectedReturnData!.a100 ?? 0}' : '0'
+                  ),
                   SizedBox(width: isTablet ? 16 : 12),
-                  _buildDenominationField('A10', isTablet),
+                  _buildDenominationField(
+                    'A10', 
+                    isTablet,
+                    value: _selectedReturnData != null ? '${_selectedReturnData!.a10 ?? 0}' : '0'
+                  ),
                 ],
               ),
               SizedBox(height: isTablet ? 8 : 6),
               Row(
                 children: [
-                  _buildDenominationField('A75', isTablet),
+                  _buildDenominationField(
+                    'A75', 
+                    isTablet,
+                    value: _selectedReturnData != null ? '${_selectedReturnData!.a75 ?? 0}' : '0'
+                  ),
                   SizedBox(width: isTablet ? 16 : 12),
-                  _buildDenominationField('A5', isTablet),
+                  _buildDenominationField(
+                    'A5', 
+                    isTablet,
+                    value: _selectedReturnData != null ? '${_selectedReturnData!.a5 ?? 0}' : '0'
+                  ),
                 ],
               ),
               SizedBox(height: isTablet ? 8 : 6),
               Row(
                 children: [
-                  _buildDenominationField('A50', isTablet),
+                  _buildDenominationField(
+                    'A50', 
+                    isTablet,
+                    value: _selectedReturnData != null ? '${_selectedReturnData!.a50 ?? 0}' : '0'
+                  ),
                   SizedBox(width: isTablet ? 16 : 12),
-                  _buildDenominationField('A2', isTablet),
+                  _buildDenominationField(
+                    'A2', 
+                    isTablet,
+                    value: _selectedReturnData != null ? '${_selectedReturnData!.a2 ?? 0}' : '0'
+                  ),
                 ],
               ),
               SizedBox(height: isTablet ? 8 : 6),
               Row(
                 children: [
-                  _buildDenominationField('A20', isTablet),
+                  _buildDenominationField(
+                    'A20', 
+                    isTablet,
+                    value: _selectedReturnData != null ? '${_selectedReturnData!.a20 ?? 0}' : '0'
+                  ),
                   SizedBox(width: isTablet ? 16 : 12),
-                  _buildDenominationField('A1', isTablet),
+                  _buildDenominationField(
+                    'A1', 
+                    isTablet,
+                    value: _selectedReturnData != null ? '${_selectedReturnData!.a1 ?? 0}' : '0'
+                  ),
                 ],
               ),
               SizedBox(height: isTablet ? 12 : 8),
@@ -752,7 +1040,7 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
                   ),
                   SizedBox(width: isTablet ? 12 : 8),
                   Text(
-                    '0',
+                    _selectedReturnData != null ? '${_selectedReturnData!.tQty ?? 0}' : '0',
                     style: TextStyle(
                       fontSize: isTablet ? 16 : 14,
                       fontWeight: FontWeight.bold,
@@ -772,7 +1060,9 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
                   ),
                   SizedBox(width: isTablet ? 12 : 8),
                   Text(
-                    'Rp 0',
+                    _selectedReturnData != null 
+                      ? 'Rp ${NumberFormat('#,###').format(_selectedReturnData!.tValue ?? 0)}'
+                      : 'Rp 0',
                     style: TextStyle(
                       fontSize: isTablet ? 16 : 14,
                       fontWeight: FontWeight.bold,
@@ -787,7 +1077,7 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
     );
   }
 
-  Widget _buildDenominationField(String denom, bool isTablet) {
+  Widget _buildDenominationField(String denom, bool isTablet, {String value = '0'}) {
     return Row(
       children: [
         SizedBox(
@@ -804,10 +1094,18 @@ class _KonsolDataReturnPageState extends State<KonsolDataReturnPage> {
           width: isTablet ? 100 : 80,
           height: isTablet ? 36 : 30,
           padding: EdgeInsets.symmetric(horizontal: 8),
+          alignment: Alignment.centerRight,
           decoration: BoxDecoration(
             border: Border.all(color: Colors.grey.shade400),
             borderRadius: BorderRadius.circular(4),
             color: Colors.white,
+          ),
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: isTablet ? 14 : 12,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
         SizedBox(width: 8),

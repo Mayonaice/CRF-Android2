@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
+import '../services/profile_service.dart';
 
 class ProfileMenuScreen extends StatefulWidget {
   const ProfileMenuScreen({Key? key}) : super(key: key);
@@ -11,10 +12,11 @@ class ProfileMenuScreen extends StatefulWidget {
 
 class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
   final AuthService _authService = AuthService();
-  String _userName = 'Lorenzo Putra';
-  String _userID = '919081021';
-  String _roleID = 'CRF_OPR';
-  String _branchName = 'JAKARTA - CIDENG';
+  final ProfileService _profileService = ProfileService();
+  String _userName = '';
+  String _userID = '';
+  String _roleID = '';
+  String _branchName = '';
   String _employeeAddress = 'Jl. Kebangsaan Timur 12 No.98, Sawah Panjang,\nJakarta Pusat, DKI Jakarta';
 
   @override
@@ -34,10 +36,10 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
       final userData = await _authService.getUserData();
       if (userData != null) {
         setState(() {
-          _userName = userData['userName'] ?? userData['userID'] ?? 'Lorenzo Putra';
-          _userID = userData['userID'] ?? '919081021';
-          _roleID = userData['roleID'] ?? 'CRF_OPR';
-          _branchName = userData['branchName'] ?? userData['branch'] ?? 'JAKARTA - CIDENG';
+          _userName = userData['userName'] ?? userData['userId'] ?? '';
+          _userID = userData['userId'] ?? userData['userID'] ?? '';
+          _roleID = userData['roleID'] ?? userData['role'] ?? '';
+          _branchName = userData['branchName'] ?? userData['branch'] ?? '';
           // Employee address could be added to user data in the future
         });
       }
@@ -129,18 +131,35 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                                           ),
                                         ),
                                         child: ClipOval(
-                                          child: Image.asset(
-                                            'assets/images/PersonIcon.png',
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) {
-                                              return Container(
-                                                color: Colors.grey.shade200,
-                                                child: Icon(
-                                                  Icons.person,
-                                                  size: isSmallScreen ? 50 : 65,
-                                                  color: Colors.grey.shade600,
-                                                ),
-                                              );
+                                          child: FutureBuilder<ImageProvider>(
+                                            future: _profileService.getProfilePhoto(),
+                                            builder: (context, snapshot) {
+                                              if (snapshot.connectionState == ConnectionState.done && 
+                                                  snapshot.hasData) {
+                                                return Image(
+                                                  image: snapshot.data!,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (context, error, stackTrace) {
+                                                    return Container(
+                                                      color: Colors.grey.shade200,
+                                                      child: Icon(
+                                                        Icons.person,
+                                                        size: isSmallScreen ? 50 : 65,
+                                                        color: Colors.grey.shade600,
+                                                      ),
+                                                    );
+                                                  },
+                                                );
+                                              } else {
+                                                return Container(
+                                                  color: Colors.grey.shade200,
+                                                  child: Icon(
+                                                    Icons.person,
+                                                    size: isSmallScreen ? 50 : 65,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                );
+                                              }
                                             },
                                           ),
                                         ),

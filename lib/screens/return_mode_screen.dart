@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../widgets/error_dialogs.dart';
 import '../widgets/barcode_scanner_widget.dart';
 import '../widgets/logout_dialog.dart';
+import '../widgets/custom_modals.dart';
 
 class ReturnModeScreen extends StatefulWidget {
   const ReturnModeScreen({Key? key}) : super(key: key);
@@ -218,78 +219,188 @@ class _ReturnModeScreenState extends State<ReturnModeScreen> {
           children: [
             // Header
             Container(
+              height: isSmallScreen ? 70 : 80,
               padding: EdgeInsets.symmetric(
-                horizontal: isSmallScreen ? 15 : 25,
-                vertical: isSmallScreen ? 8 : 12,
+                horizontal: isSmallScreen ? 24.0 : 32.0,
+                vertical: isSmallScreen ? 12.0 : 16.0,
               ),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.8),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(20),
-                  bottomRight: Radius.circular(20),
-                ),
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
-                  // Back button
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.black),
-                    onPressed: () => Navigator.of(context).pop(),
+                  // Menu button - Green hamburger icon
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: isSmallScreen ? 40 : 48,
+                      height: isSmallScreen ? 40 : 48,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.menu,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: isSmallScreen ? 16 : 20),
+                  
                   // Title
-                  const Text(
+                  Text(
                     'Return Mode',
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: isSmallScreen ? 24 : 28,
                       fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                      letterSpacing: -0.5,
                     ),
                   ),
+                  
                   const Spacer(),
-                  // Location
-                  Text(
-                    '$_branchName ($_branchCode)',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  
+                  // Location info
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _branchName,
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 16 : 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black,
+                          letterSpacing: 0.5,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                      Text(
+                        'Meja : $_noMeja',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 14 : 16,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  // Meja
+                  
+                  SizedBox(width: isSmallScreen ? 20 : 24),
+                  
+                  // CRF_OPR button
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 15,
-                      vertical: 5,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? 16 : 20,
+                      vertical: isSmallScreen ? 10 : 12,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(20),
+                      color: const Color(0xFF10B981),
+                      borderRadius: BorderRadius.circular(25),
                     ),
                     child: Text(
-                      'Meja : $_noMeja',
-                      style: const TextStyle(
+                      'CRF_OPR',
+                      style: TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                        fontSize: isSmallScreen ? 14 : 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  // User
-                  CircleAvatar(
-                    backgroundColor: Colors.blue[100],
-                    child: Text(
-                      _userName.isNotEmpty ? _userName[0] : 'U',
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  
+                  SizedBox(width: isSmallScreen ? 12 : 16),
+                  
+                  // Menu button (3 horizontal lines)
+                  Container(
+                    width: isSmallScreen ? 40 : 44,
+                    height: isSmallScreen ? 40 : 44,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF10B981),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.menu,
+                      color: Colors.white,
+                      size: 22,
                     ),
                   ),
-                  const SizedBox(width: 5),
-                  // Logout
-                  IconButton(
-                    icon: const Icon(Icons.logout, color: Colors.red),
-                    onPressed: () => showLogoutDialog(context),
+                  
+                  SizedBox(width: isSmallScreen ? 20 : 24),
+                  
+                  // User info
+                  Row(
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            constraints: BoxConstraints(maxWidth: isSmallScreen ? 120 : 150),
+                            child: Text(
+                              _userName,
+                              style: TextStyle(
+                                fontSize: isSmallScreen ? 16 : 18,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                          FutureBuilder<Map<String, dynamic>?>(
+                            future: _authService.getUserData(),
+                            builder: (context, snapshot) {
+                              String nik = '';
+                              if (snapshot.hasData && snapshot.data != null) {
+                                nik = snapshot.data!['userId'] ?? 
+                                      snapshot.data!['userID'] ?? 
+                                      '';
+                              } else {
+                                nik = '';
+                              }
+                              return Text(
+                                nik,
+                                style: TextStyle(
+                                  fontSize: isSmallScreen ? 12 : 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF6B7280),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      SizedBox(width: isSmallScreen ? 10 : 12),
+                      Container(
+                        width: isSmallScreen ? 44 : 48,
+                        height: isSmallScreen ? 44 : 48,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: Container(
+                            color: const Color(0xFF10B981),
+                            child: const Icon(
+                              Icons.person,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -793,44 +904,31 @@ class _ReturnModeScreenState extends State<ReturnModeScreen> {
   }
 } 
 
-// Tambahkan fallback jika showErrorDialog belum ada
-dynamic _maybeShowErrorDialog;
+// Use CustomModals for error dialogs
 void showErrorDialog(BuildContext context, String title, String message) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('OK'),
-        ),
-      ],
-    ),
-  );
+  if (title.toLowerCase() == 'sukses' || title.toLowerCase() == 'success') {
+    CustomModals.showSuccessModal(
+      context: context,
+      message: message,
+    );
+  } else {
+    CustomModals.showFailedModal(
+      context: context,
+      message: message,
+    );
+  }
 }
 
-// Tambahkan fallback jika showLogoutDialog belum ada
+// Use CustomModals for logout confirmation
 void showLogoutDialog(BuildContext context) {
-  showDialog(
+  CustomModals.showConfirmationModal(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Logout'),
-      content: const Text('Apakah Anda yakin ingin logout?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Batal'),
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.of(context).pop();
-            // Tambahkan logika logout jika perlu
-          },
-          child: const Text('Logout'),
-        ),
-      ],
-    ),
-  );
+    message: 'Apakah Anda yakin ingin logout?',
+    confirmText: 'Logout',
+    cancelText: 'Batal',
+  ).then((confirmed) {
+    if (confirmed) {
+      // Add logout logic if needed
+    }
+  });
 } 

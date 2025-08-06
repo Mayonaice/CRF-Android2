@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'prepare_mode_screen.dart';
 import '../services/auth_service.dart';
+import '../services/profile_service.dart';
 import '../widgets/error_dialogs.dart';
 
 class HomePage extends StatefulWidget {
@@ -13,7 +14,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final AuthService _authService = AuthService();
-  String _userName = 'Lorenzo Putra'; // Default value
+  final ProfileService _profileService = ProfileService();
+  String _userName = ' Putra'; // Default value
   String _branchName = 'JAKARTA - CIDENG'; // Default value
   String? _userRole; // NEW: Store user role
   List<String> _availableMenus = []; // NEW: Store available menus based on role
@@ -286,17 +288,31 @@ class _HomePageState extends State<HomePage> {
                           radius: isSmallScreen ? 25 : 35,
                           backgroundColor: Colors.blue[100],
                           child: ClipOval(
-                            child: Image.asset(
-                              'assets/images/PersonIcon.png',
-                              width: isSmallScreen ? 45 : 60,
-                              height: isSmallScreen ? 45 : 60,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Icon(
-                                  Icons.person,
-                                  size: isSmallScreen ? 30 : 42,
-                                  color: Colors.white,
-                                );
+                            child: FutureBuilder<ImageProvider>(
+                              future: _profileService.getProfilePhoto(),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState == ConnectionState.done && 
+                                    snapshot.hasData) {
+                                  return Image(
+                                    image: snapshot.data!,
+                                    width: isSmallScreen ? 45 : 60,
+                                    height: isSmallScreen ? 45 : 60,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Icon(
+                                        Icons.person,
+                                        size: isSmallScreen ? 30 : 42,
+                                        color: Colors.white,
+                                      );
+                                    },
+                                  );
+                                } else {
+                                  return Icon(
+                                    Icons.person,
+                                    size: isSmallScreen ? 30 : 42,
+                                    color: Colors.white,
+                                  );
+                                }
                               },
                             ),
                           ),
@@ -848,19 +864,49 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         child: Center(
-          child: Image.asset(
-            iconAsset,
-            width: isSmallScreen ? 40 : 55, // Increased even more from 35/50
-            height: isSmallScreen ? 40 : 55, // Increased even more from 35/50
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return Icon(
-                Icons.error,
-                size: isSmallScreen ? 35 : 50, // Increased even more from 30/45
-                color: Colors.grey,
-              );
-            },
-          ),
+          child: iconAsset == 'assets/images/PersonIcon.png'
+            ? FutureBuilder<ImageProvider>(
+                future: _profileService.getProfilePhoto(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.done && 
+                      snapshot.hasData) {
+                    return ClipOval(
+                      child: Image(
+                        image: snapshot.data!,
+                        width: isSmallScreen ? 40 : 55,
+                        height: isSmallScreen ? 40 : 55,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.person,
+                            size: isSmallScreen ? 35 : 50,
+                            color: Colors.grey,
+                          );
+                        },
+                      ),
+                    );
+                  } else {
+                    return Icon(
+                      Icons.person,
+                      size: isSmallScreen ? 35 : 50,
+                      color: Colors.grey,
+                    );
+                  }
+                },
+              )
+            : Image.asset(
+                iconAsset,
+                width: isSmallScreen ? 40 : 55, // Increased even more from 35/50
+                height: isSmallScreen ? 40 : 55, // Increased even more from 35/50
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    Icons.error,
+                    size: isSmallScreen ? 35 : 50, // Increased even more from 30/45
+                    color: Colors.grey,
+                  );
+                },
+              ),
         ),
       ),
     );

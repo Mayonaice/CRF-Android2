@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
+import '../services/profile_service.dart';
 import '../screens/login_page.dart';
 
 class TLProfileScreen extends StatefulWidget {
@@ -12,10 +13,11 @@ class TLProfileScreen extends StatefulWidget {
 
 class _TLProfileScreenState extends State<TLProfileScreen> {
   final AuthService _authService = AuthService();
-  String _userName = 'Lorenzo Putra';
-  String _userID = '919081021';
+  final ProfileService _profileService = ProfileService();
+  String _userName = '';
+  String _userID = '';
   String _roleID = 'CRF_TL';
-  String _branchName = 'JAKARTA - CIDENG';
+  String _branchName = '';
   String _employeeAddress = 'Jl. Kebangsaan Timur 12 No.98, Sawah Panjang,\nJakarta Pusat, DKI Jakarta';
 
   @override
@@ -177,7 +179,7 @@ class _TLProfileScreenState extends State<TLProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Profile Photo
+                    // Profile Photo - using API
                     Container(
                       width: 100,
                       height: 100,
@@ -189,10 +191,34 @@ class _TLProfileScreenState extends State<TLProfileScreen> {
                           width: 3,
                         ),
                       ),
-                      child: const Icon(
-                        Icons.person,
-                        color: Colors.white,
-                        size: 50,
+                      child: ClipOval(
+                        child: FutureBuilder<ImageProvider>(
+                          future: _profileService.getProfilePhoto(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.done && 
+                                snapshot.hasData) {
+                              return Image(
+                                image: snapshot.data!,
+                                fit: BoxFit.cover,
+                                width: 100,
+                                height: 100,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(
+                                    Icons.person,
+                                    color: Colors.white,
+                                    size: 50,
+                                  );
+                                },
+                              );
+                            } else {
+                              return const Icon(
+                                Icons.person,
+                                color: Colors.white,
+                                size: 50,
+                              );
+                            }
+                          },
+                        ),
                       ),
                     ),
                     

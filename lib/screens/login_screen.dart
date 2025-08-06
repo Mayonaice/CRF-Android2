@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import '../utils/constants.dart';
+import '../widgets/custom_modals.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -53,24 +54,33 @@ class _LoginScreenState extends State<LoginScreen> {
         );
 
         if (result['success']) {
-          // Navigate to home screen
+          // Show success message and navigate to home screen
           if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const HomeScreen()),
+            await CustomModals.showSuccessModal(
+              context: context,
+              message: 'Login berhasil!',
+              onPressed: () {
+                Navigator.pop(context); // Close modal
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HomeScreen()),
+                );
+              },
             );
           }
         } else {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(result['message'])),
+            await CustomModals.showFailedModal(
+              context: context,
+              message: result['message'] ?? 'Login gagal',
             );
           }
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e')),
+          await CustomModals.showFailedModal(
+            context: context,
+            message: 'Error: $e',
           );
         }
       } finally {

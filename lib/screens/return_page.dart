@@ -52,6 +52,14 @@ class _ReturnModePageState extends State<ReturnModePage> {
   String _errorMessage = '';
   bool _isLoading = false;
   
+  // User data variables
+  String _userName = '';
+  String _branchName = '';
+  String _userId = '';
+  
+  // Responsive design helper
+  bool get isTablet => MediaQuery.of(context).size.width > 600;
+  
   // State untuk data return dan detail header
   ReturnHeaderResponse? _returnHeaderResponse;
   Map<String, dynamic>? _userData;
@@ -141,9 +149,15 @@ class _ReturnModePageState extends State<ReturnModePage> {
         if (userData != null) {
           _userData = userData;
           
+          // Extract user data
+          _userName = userData['userName'] ?? userData['name'] ?? '';
+          _userId = userData['userId'] ?? userData['userID'] ?? '';
+          _branchName = userData['branchName'] ?? userData['branch'] ?? '';
+          
           // Log all user data for debugging
           print('DEBUG - Loading user data: $userData');
           print('DEBUG - User data keys: ${userData.keys.toList()}');
+          print('DEBUG - UserName: $_userName, UserID: $_userId, BranchName: $_branchName');
           
           // Extract and log the NIK value for debugging
           String userNIK = '';
@@ -194,9 +208,9 @@ class _ReturnModePageState extends State<ReturnModePage> {
           _branchCode = '1';
           print('No user data found, using default branch code: $_branchCode');
           
-          // Create a default userData map with a NIK
-          _userData = {'nik': '9190812021'};
-          print('DEBUG - Created default userData with NIK: ${_userData!['nik']}');
+          // Create a default userData map
+          _userData = {'userName': '', 'userId': ''};
+          print('DEBUG - Created default userData');
         }
       });
     } catch (e) {
@@ -204,9 +218,9 @@ class _ReturnModePageState extends State<ReturnModePage> {
         _branchCode = '1';
         print('Error loading user data: $e, using default branch code: $_branchCode');
         
-        // Create a default userData map with a NIK
-        _userData = {'nik': '9190812021'};
-        print('DEBUG - Created default userData with NIK after error: ${_userData!['nik']}');
+        // Create a default userData map
+        _userData = {'userName': '', 'userId': ''};
+        print('DEBUG - Created default userData after error');
       });
     }
   }
@@ -438,27 +452,61 @@ class _ReturnModePageState extends State<ReturnModePage> {
           barrierDismissible: false,
           builder: (BuildContext context) {
             return AlertDialog(
-              title: const Text('Approval Team Leader'),
+              title: Text(
+                'Approval TL Supervisor',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Masukkan NIK dan Password Team Leader untuk approval:'),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _tlNikController,
-                      decoration: const InputDecoration(
-                        labelText: 'NIK TL',
-                        border: OutlineInputBorder(),
+                    Text(
+                      'NIK TL SPV',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _tlPasswordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Password',
-                        border: OutlineInputBorder(),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Colors.grey.shade400)),
+                      ),
+                      child: TextField(
+                        controller: _tlNikController,
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                          suffixIcon: Icon(Icons.person_outline, color: Colors.grey),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Password',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Colors.grey.shade400)),
+                      ),
+                      child: TextField(
+                        controller: _tlPasswordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                          suffixIcon: Icon(Icons.visibility, color: Colors.grey),
+                        ),
                       ),
                     ),
                   ],
@@ -467,13 +515,23 @@ class _ReturnModePageState extends State<ReturnModePage> {
               actions: <Widget>[
                 TextButton(
                   child: const Text('Batal'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.grey,
+                  ),
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
                 ),
                 _isSubmitting
                     ? const CircularProgressIndicator()
-                    : TextButton(
+                    : ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
                         child: const Text('Approve'),
                         onPressed: () {
                           Navigator.of(context).pop();
@@ -575,7 +633,7 @@ class _ReturnModePageState extends State<ReturnModePage> {
       // If NIK is still empty, use a hardcoded value to prevent API error
       if (userNIK.isEmpty) {
         print('WARNING - Using default NIK since userData does not contain NIK');
-        userNIK = '9190812021'; // Default NIK to prevent API error
+                  userNIK = ''; // No default NIK
       }
       
       bool allSuccess = true;
@@ -703,7 +761,7 @@ class _ReturnModePageState extends State<ReturnModePage> {
       // If NIK is still empty, use a hardcoded value to prevent API error
       if (userNIK.isEmpty) {
         print('WARNING - Using default NIK since userData does not contain NIK');
-        userNIK = '9190812021'; // Default NIK to prevent API error
+                  userNIK = ''; // No default NIK
       }
       
       bool allSuccess = true;
@@ -1014,15 +1072,18 @@ class _ReturnModePageState extends State<ReturnModePage> {
       appBar: null, // Remove default AppBar
       body: Column(
         children: [
-          // Custom header - matched exactly with prepare_mode
+          // Custom header - matched with konsol_mode
           Container(
-            height: 80, // Increased height to match prepare mode (was 60)
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+            height: isTabletOrLandscapeMobile ? 80 : 70,
+            padding: EdgeInsets.symmetric(
+              horizontal: isTabletOrLandscapeMobile ? 32.0 : 24.0,
+              vertical: isTabletOrLandscapeMobile ? 16.0 : 12.0,
+            ),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withOpacity(0.05),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -1030,113 +1091,198 @@ class _ReturnModePageState extends State<ReturnModePage> {
             ),
             child: Row(
               children: [
-                // Back button - bigger
-                IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back,
-                    color: Colors.red,
-                    size: 30, // Increased size (was 24)
+                // Menu button - Green hamburger icon
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: isTabletOrLandscapeMobile ? 48 : 40,
+                    height: isTabletOrLandscapeMobile ? 48 : 40,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF10B981),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.menu,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 48),
-                  onPressed: () => Navigator.of(context).pop(),
                 ),
-                const SizedBox(width: 16),
+                SizedBox(width: isTabletOrLandscapeMobile ? 20 : 16),
                 
-                // Title - bigger
-                const Text(
+                // Title
+                Text(
                   'Return Mode',
                   style: TextStyle(
-                    fontSize: 22, // Increased size (was 20)
+                    fontSize: isTabletOrLandscapeMobile ? 28 : 24,
                     fontWeight: FontWeight.bold,
                     color: Colors.black,
+                    letterSpacing: -0.5,
                   ),
                 ),
                 
                 const Spacer(),
                 
-                // Branch info - bigger
+                // Location info
                 Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: const [
-                    Text(
-                      'JAKARTA-CIDENG',
-                      style: TextStyle(
-                        fontSize: 16, // Increased size (was 14)
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Meja : 010101',
-                      style: TextStyle(
-                        fontSize: 16, // Increased size (was 12)
-                      ),
-                    ),
-                  ],
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _branchName,
+                style: TextStyle(
+                  fontSize: isTablet ? 18 : 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                  letterSpacing: 0.5,
                 ),
-                const SizedBox(width: 20), // Increased spacing (was 16)
-                
-                // CRF_OPR badge - bigger
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Increased padding
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade100,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'CRF_OPR',
-                    style: TextStyle(
-                      fontSize: 16, // Increased size (was 14)
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
-                  ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              Container(
+                width: isTablet ? 100 : 80,
+                child: FutureBuilder<Map<String, dynamic>?>(
+                  future: _authService.getUserData(),
+                  builder: (context, snapshot) {
+                    String meja = '';
+                    if (snapshot.hasData && snapshot.data != null) {
+                      meja = snapshot.data!['noMeja'] ?? 
+                            snapshot.data!['NoMeja'] ?? 
+                            '010101';
+                    } else {
+                      meja = '010101';
+                    }
+                    return Text(
+                      'Meja: $meja',
+                      style: TextStyle(
+                        fontSize: isTablet ? 16 : 14,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF6B7280),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    );
+                  },
                 ),
-                const SizedBox(width: 16),
-                
-                // User info - bigger
-                Row(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey.shade300),
+              ),
+            ],
+          ),
+          
+          SizedBox(width: isTablet ? 24 : 20),
+          
+          // CRF_KONSOL button
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isTablet ? 20 : 16,
+              vertical: isTablet ? 12 : 10,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981),
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: Text(
+              'CRF_KONSOL',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isTablet ? 16 : 14,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          
+          SizedBox(width: isTablet ? 16 : 12),
+          
+          // Refresh button
+          GestureDetector(
+            onTap: () {
+              // Refresh data when clicked
+              setState(() {
+                _returnHeaderResponse = null;
+                _idToolController.clear();
+                _jamMulaiController.clear();
+                _errorMessage = '';
+              });
+            },
+            child: Container(
+              width: isTablet ? 44 : 40,
+              height: isTablet ? 44 : 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFF10B981),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.refresh,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          ),
+          
+          SizedBox(width: isTablet ? 24 : 20),
+          
+          // User info
+          Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    constraints: BoxConstraints(maxWidth: isTablet ? 150 : 120),
+                    child: Text(
+                      _userName,
+                      style: TextStyle(
+                        fontSize: isTablet ? 18 : 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
                       ),
-                      child: CircleAvatar(
-                        radius: 20, // Increased size (was 18)
-                        backgroundColor: Colors.grey.shade200,
-                        child: ClipOval(
-                          child: Image.network(
-                            'https://randomuser.me/api/portraits/men/75.jpg',
-                            width: 40, // Increased size (was 36)
-                            height: 40, // Increased size (was 36)
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.person),
-                          ),
-                        ),
-                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
-                    const SizedBox(width: 8),
-                    const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Lorenzo Putra',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
+                  ),
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: _authService.getUserData(),
+                    builder: (context, snapshot) {
+                      String nik = '';
+                      if (snapshot.hasData && snapshot.data != null) {
+                        nik = snapshot.data!['userId'] ?? 
+                              snapshot.data!['userID'] ?? 
+                              '';
+                      } else {
+                        nik = _userData != null && _userData!.containsKey('userId') ? _userData!['userId'] : '';
+                      }
+                      return Text(
+                        nik,
+                        style: TextStyle(
+                          fontSize: isTablet ? 14 : 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              SizedBox(width: isTablet ? 12 : 10),
+              Container(
+                width: isTablet ? 48 : 44,
+                height: isTablet ? 48 : 44,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF10B981),
+                  shape: BoxShape.circle,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Container(
+                    color: const Color(0xFF10B981),
+                    child: const Icon(
+                      Icons.person,
+                      color: Colors.white,
+                      size: 24,
                           ),
                         ),
-                        Text(
-                          '9190812021',
-                          style: TextStyle(
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
@@ -3004,6 +3150,7 @@ class DetailSection extends StatelessWidget {
         .toList();
   }
 }
+
 
 
 

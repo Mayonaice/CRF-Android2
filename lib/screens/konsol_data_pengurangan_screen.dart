@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../services/auth_service.dart';
+import '../services/konsol_api_service.dart';
+import '../models/pengurangan_data_model.dart';
+import '../widgets/custom_modals.dart';
+import 'add_pengurangan_dialog.dart';
 
 class KonsolDataPenguranganPage extends StatefulWidget {
   const KonsolDataPenguranganPage({super.key});
@@ -15,9 +19,16 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
   DateTime toDate = DateTime.now();
   String searchQuery = '';
   final AuthService _authService = AuthService();
-  String _userName = 'Lorenzo Putra'; // Default value
-  String _branchName = 'JAKARTA-CIDENG'; // Default value
-  String _nik = '9190812021'; // Default value
+  final KonsolApiService _konsolApiService = KonsolApiService();
+  String _userName = ''; 
+  String _branchName = '';
+  String _userId = '';
+  String _branchCode = '';
+  
+  // Data state
+  List<PenguranganData> _penguranganDataList = [];
+  bool _isLoading = false;
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -35,14 +46,111 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
       final userData = await _authService.getUserData();
       if (userData != null) {
         setState(() {
-          _userName = userData['userName'] ?? userData['userID'] ?? userData['name'] ?? 'Lorenzo Putra';
-          _branchName = userData['branchName'] ?? userData['branch'] ?? 'JAKARTA-CIDENG';
-          _nik = userData['nik'] ?? userData['NIK'] ?? '9190812021';
+          _userName = userData['userName'] ?? userData['name'] ?? '';
+          _userId = userData['userId'] ?? userData['userID'] ?? '';
+          _branchName = userData['branchName'] ?? userData['branch'] ?? '';
+          
+          // Use groupId as the primary source for branchCode parameter
+          _branchCode = userData['groupId'] ?? 
+                       userData['GroupId'] ?? 
+                       userData['groupID'] ?? 
+                       userData['GroupID'] ?? 
+                       userData['branchCode'] ?? 
+                       userData['BranchCode'] ?? 
+                       '';
         });
+        debugPrint('🔍 User data loaded - UserName: $_userName, UserID: $_userId, GroupId/BranchCode: $_branchCode');
+        
+        // Debug: Print all user data keys and values
+        userData.forEach((key, value) {
+          debugPrint('🔍 UserData[$key] = $value');
+        });
+        
+        // Load pengurangan data after user data is loaded
+        _loadPenguranganData();
       }
     } catch (e) {
       debugPrint('Error loading user data: $e');
     }
+  }
+  
+  // Format date for API
+  String _formatDateForApi(DateTime date) {
+    return DateFormat('dd-MM-yyyy').format(date);
+  }
+  
+  // Load pengurangan data from API
+  Future<void> _loadPenguranganData() async {
+    if (_isLoading) return;
+    
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+    
+    try {
+      final fromDateStr = _formatDateForApi(fromDate);
+      final toDateStr = _formatDateForApi(toDate);
+      
+      // If branchCode (which is actually groupId) is empty, use a default value
+      if (_branchCode.isEmpty) {
+        debugPrint('⚠️ Warning: GroupId is empty! Using default value "1"');
+        _branchCode = "1"; // Default group ID
+      }
+      
+      debugPrint('🔍 Loading pengurangan data with parameters: groupId=$_branchCode, fromDate=$fromDateStr, toDate=$toDateStr');
+      
+      final data = await _konsolApiService.getPenguranganAndroidList(
+        branchCode: _branchCode, // This parameter name is still branchCode in the API service
+        fromDate: fromDateStr,
+        toDate: toDateStr,
+      );
+      
+      setState(() {
+        _penguranganDataList = data;
+        _isLoading = false;
+        
+        // Filter by search query if provided
+        if (searchQuery.isNotEmpty) {
+          _filterDataBySearchQuery();
+        }
+      });
+      
+      debugPrint('🔍 Loaded ${data.length} pengurangan records');
+      
+
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load data: ${e.toString()}';
+      });
+      debugPrint('🔍 Error loading pengurangan data: $e');
+      
+      // Show error in modal
+      if (mounted) {
+        CustomModals.showFailedModal(
+          context: context,
+          message: 'Gagal memuat data: ${e.toString()}',
+        );
+      }
+    }
+  }
+  
+  // Filter data by search query
+  void _filterDataBySearchQuery() {
+    if (searchQuery.isEmpty) return;
+    
+    final query = searchQuery.toLowerCase();
+    setState(() {
+      _penguranganDataList = _penguranganDataList.where((item) {
+        return 
+          (item.jenis?.toLowerCase().contains(query) ?? false) ||
+          (item.bank?.toLowerCase().contains(query) ?? false) ||
+          (item.mesin?.toLowerCase().contains(query) ?? false) ||
+          (item.userInput?.toLowerCase().contains(query) ?? false) ||
+          (item.keterangan?.toLowerCase().contains(query) ?? false);
+      }).toList();
+    });
   }
 
   @override
@@ -54,6 +162,29 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
       DeviceOrientation.landscapeRight,
     ]);
     super.dispose();
+  }
+  
+  // Show add pengurangan dialog
+  Future<void> _showAddPenguranganDialog(BuildContext context, bool isTablet) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const AddPenguranganDialog();
+      },
+    );
+    
+    // If dialog returns true, refresh data
+    if (result == true) {
+      // Show success message
+      await CustomModals.showSuccessModal(
+        context: context,
+        message: 'Data berhasil ditambahkan',
+      );
+      
+      // Refresh data
+      _loadPenguranganData();
+    }
   }
 
   @override
@@ -110,20 +241,20 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
       ),
       child: Row(
         children: [
-          // Back button - Red triangle/arrow
+          // Menu button - Green hamburger icon
           GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
               width: isTablet ? 48 : 40,
               height: isTablet ? 48 : 40,
               decoration: const BoxDecoration(
-                color: Color(0xFFDC2626),
+                color: Color(0xFF10B981),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.arrow_back_ios,
+                Icons.menu,
                 color: Colors.white,
-                size: 20,
+                size: 24,
               ),
             ),
           ),
@@ -155,13 +286,33 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
                   color: Colors.black,
                   letterSpacing: 0.5,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
-              Text(
-                'Meja : 010101',
-                style: TextStyle(
-                  fontSize: isTablet ? 16 : 14,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF6B7280),
+              Container(
+                width: isTablet ? 100 : 80,
+                child: FutureBuilder<Map<String, dynamic>?>(
+                  future: _authService.getUserData(),
+                  builder: (context, snapshot) {
+                    String meja = '';
+                    if (snapshot.hasData && snapshot.data != null) {
+                      meja = snapshot.data!['noMeja'] ?? 
+                            snapshot.data!['NoMeja'] ?? 
+                            '010101';
+                    } else {
+                      meja = '010101';
+                    }
+                    return Text(
+                      'Meja: $meja',
+                      style: TextStyle(
+                        fontSize: isTablet ? 16 : 14,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF6B7280),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    );
+                  },
                 ),
               ),
             ],
@@ -193,17 +344,27 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
           SizedBox(width: isTablet ? 16 : 12),
           
           // Refresh button
-          Container(
-            width: isTablet ? 44 : 40,
-            height: isTablet ? 44 : 40,
-            decoration: const BoxDecoration(
-              color: Color(0xFF10B981),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.refresh,
-              color: Colors.white,
-              size: 22,
+          GestureDetector(
+            onTap: () {
+              // Refresh data when clicked
+              setState(() {
+                fromDate = DateTime.now();
+                toDate = DateTime.now();
+                _loadUserData();
+              });
+            },
+            child: Container(
+              width: isTablet ? 44 : 40,
+              height: isTablet ? 44 : 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFF10B981),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.refresh,
+                color: Colors.white,
+                size: 22,
+              ),
             ),
           ),
           
@@ -216,21 +377,39 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    _userName,
-                    style: TextStyle(
-                      fontSize: isTablet ? 18 : 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
+                  Container(
+                    constraints: BoxConstraints(maxWidth: isTablet ? 150 : 120),
+                    child: Text(
+                      _userName,
+                      style: TextStyle(
+                        fontSize: isTablet ? 18 : 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
-                  Text(
-                    _nik,
-                    style: TextStyle(
-                      fontSize: isTablet ? 14 : 12,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF6B7280),
-                    ),
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: _authService.getUserData(),
+                    builder: (context, snapshot) {
+                      String nik = '';
+                      if (snapshot.hasData && snapshot.data != null) {
+                                              nik = snapshot.data!['userId'] ?? 
+                            snapshot.data!['userID'] ?? 
+                            '';
+                      } else {
+                        nik = _userId;
+                      }
+                      return Text(
+                        nik,
+                        style: TextStyle(
+                          fontSize: isTablet ? 14 : 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -428,6 +607,7 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
                 // From date
                 _buildDateField(fromDate, isTablet, (date) {
                   setState(() => fromDate = date);
+                  _loadPenguranganData(); // Auto-refresh when date changes
                 }),
                 
                 SizedBox(width: isTablet ? 16 : 12),
@@ -447,6 +627,7 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
                 // To date
                 _buildDateField(toDate, isTablet, (date) {
                   setState(() => toDate = date);
+                  _loadPenguranganData(); // Auto-refresh when date changes
                 }),
               ],
             ),
@@ -481,11 +662,16 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
                     color: Colors.white,
                   ),
                   child: TextField(
-                    onChanged: (value) => setState(() => searchQuery = value),
+                    onChanged: (value) {
+                      setState(() => searchQuery = value);
+                      _filterDataBySearchQuery(); // Auto-filter when search query changes
+                    },
                     decoration: InputDecoration(
                       contentPadding: EdgeInsets.symmetric(horizontal: 12),
                       border: InputBorder.none,
                       suffixIcon: Icon(Icons.search, color: Colors.grey.shade600),
+                      hintText: 'Search...',
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
                     ),
                   ),
                 ),
@@ -623,18 +809,118 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
               ),
             ),
             
-            // Empty table body
+            // Table body with data or loading indicator
             Expanded(
-              child: Center(
-                child: Text(
-                  'No data available',
-                  style: TextStyle(
-                    fontSize: isTablet ? 16 : 14,
-                    color: Colors.grey.shade500,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
+              child: _isLoading 
+                ? Center(child: CircularProgressIndicator())
+                : _errorMessage.isNotEmpty 
+                  ? Center(
+                      child: Text(
+                        _errorMessage,
+                        style: TextStyle(
+                          fontSize: isTablet ? 16 : 14,
+                          color: Colors.red,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  : _penguranganDataList.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No data available',
+                          style: TextStyle(
+                            fontSize: isTablet ? 16 : 14,
+                            color: Colors.grey.shade500,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _penguranganDataList.length,
+                        itemBuilder: (context, index) {
+                          final item = _penguranganDataList[index];
+                          return Container(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              color: index % 2 == 0 ? Colors.white : Colors.grey.shade50,
+                            ),
+                            child: Row(
+                              children: columns.map((column) {
+                                String value = '';
+                                switch (column) {
+                                  case 'Jenis':
+                                    value = item.jenis ?? '';
+                                    break;
+                                  case 'Tanggal Replenish':
+                                    value = item.tanggalReplenish ?? '';
+                                    break;
+                                  case 'Tanggal Proses':
+                                    value = item.tanggalProses ?? '';
+                                    break;
+                                  case 'Bank':
+                                    value = item.bank ?? '';
+                                    break;
+                                  case 'Mesin':
+                                    value = item.mesin ?? '';
+                                    break;
+                                  case 'A1':
+                                    value = item.a1?.toString() ?? '0';
+                                    break;
+                                  case 'A2':
+                                    value = item.a2?.toString() ?? '0';
+                                    break;
+                                  case 'A5':
+                                    value = item.a5?.toString() ?? '0';
+                                    break;
+                                  case 'A10':
+                                    value = item.a10?.toString() ?? '0';
+                                    break;
+                                  case 'A20':
+                                    value = item.a20?.toString() ?? '0';
+                                    break;
+                                  case 'A50':
+                                    value = item.a50?.toString() ?? '0';
+                                    break;
+                                  case 'A75':
+                                    value = item.a75?.toString() ?? '0';
+                                    break;
+                                  case 'A100':
+                                    value = item.a100?.toString() ?? '0';
+                                    break;
+                                  case 'User Input':
+                                    value = item.userInput ?? '';
+                                    break;
+                                  case 'Keterangan':
+                                    value = item.keterangan ?? '';
+                                    break;
+                                }
+                                
+                                return Container(
+                                  width: columnWidths[column],
+                                  padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(color: Colors.grey.shade300),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    value,
+                                    style: TextStyle(
+                                      fontSize: isTablet ? 12 : 9,
+                                    ),
+                                    textAlign: column.contains('A') ? TextAlign.right : TextAlign.left,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 2,
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          );
+                        },
+                      ),
             ),
           ],
         ),
@@ -648,39 +934,42 @@ class _KonsolDataPenguranganPageState extends State<KonsolDataPenguranganPage> {
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
           // Add Data button
-          Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: isTablet ? 24 : 20,
-              vertical: isTablet ? 12 : 10,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.green.shade400,
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.add,
-                  size: isTablet ? 20 : 18,
-                  color: Colors.white,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'Add Data',
-                  style: TextStyle(
-                    fontSize: isTablet ? 16 : 14,
-                    fontWeight: FontWeight.bold,
+          GestureDetector(
+            onTap: () => _showAddPenguranganDialog(context, isTablet),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isTablet ? 24 : 20,
+                vertical: isTablet ? 12 : 10,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.green.shade400,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.add,
+                    size: isTablet ? 20 : 18,
                     color: Colors.white,
                   ),
-                ),
-              ],
+                  SizedBox(width: 8),
+                  Text(
+                    'Add Data',
+                    style: TextStyle(
+                      fontSize: isTablet ? 16 : 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

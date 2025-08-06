@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../services/auth_service.dart';
+import 'add_closing_dialog.dart';
 
 class KonsolDataClosingPage extends StatefulWidget {
   const KonsolDataClosingPage({super.key});
@@ -15,9 +16,9 @@ class _KonsolDataClosingPageState extends State<KonsolDataClosingPage> {
   DateTime toDate = DateTime.now();
   String searchQuery = '';
   final AuthService _authService = AuthService();
-  String _userName = 'Lorenzo Putra'; // Default value
-  String _branchName = 'JAKARTA-CIDENG'; // Default value
-  String _nik = '9190812021'; // Default value
+  String _userName = ''; 
+  String _branchName = '';
+  String _userId = '';
 
   @override
   void initState() {
@@ -35,9 +36,9 @@ class _KonsolDataClosingPageState extends State<KonsolDataClosingPage> {
       final userData = await _authService.getUserData();
       if (userData != null) {
         setState(() {
-          _userName = userData['userName'] ?? userData['userID'] ?? userData['name'] ?? 'Lorenzo Putra';
-          _branchName = userData['branchName'] ?? userData['branch'] ?? 'JAKARTA-CIDENG';
-          _nik = userData['nik'] ?? userData['NIK'] ?? '9190812021';
+          _userName = userData['userName'] ?? userData['name'] ?? '';
+          _userId = userData['userId'] ?? userData['userID'] ?? '';
+          _branchName = userData['branchName'] ?? userData['branch'] ?? '';
         });
       }
     } catch (e) {
@@ -155,13 +156,33 @@ class _KonsolDataClosingPageState extends State<KonsolDataClosingPage> {
                   color: Colors.black,
                   letterSpacing: 0.5,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
-              Text(
-                'Meja : 010101',
-                style: TextStyle(
-                  fontSize: isTablet ? 16 : 14,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF6B7280),
+              Container(
+                width: isTablet ? 100 : 80,
+                child: FutureBuilder<Map<String, dynamic>?>(
+                  future: _authService.getUserData(),
+                  builder: (context, snapshot) {
+                    String meja = '';
+                    if (snapshot.hasData && snapshot.data != null) {
+                      meja = snapshot.data!['noMeja'] ?? 
+                            snapshot.data!['NoMeja'] ?? 
+                            '010101';
+                    } else {
+                      meja = '010101';
+                    }
+                    return Text(
+                      'Meja: $meja',
+                      style: TextStyle(
+                        fontSize: isTablet ? 16 : 14,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF6B7280),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    );
+                  },
                 ),
               ),
             ],
@@ -193,17 +214,30 @@ class _KonsolDataClosingPageState extends State<KonsolDataClosingPage> {
           SizedBox(width: isTablet ? 16 : 12),
           
           // Refresh button
-          Container(
-            width: isTablet ? 44 : 40,
-            height: isTablet ? 44 : 40,
-            decoration: const BoxDecoration(
-              color: Color(0xFF10B981),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.refresh,
-              color: Colors.white,
-              size: 22,
+          GestureDetector(
+            onTap: () {
+              // Refresh data when clicked
+              setState(() {
+                // Reset any state variables that need refreshing
+                fromDate = DateTime.now();
+                toDate = DateTime.now();
+                searchQuery = '';
+              });
+              // Re-load user data
+              _loadUserData();
+            },
+            child: Container(
+              width: isTablet ? 44 : 40,
+              height: isTablet ? 44 : 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFF10B981),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.refresh,
+                color: Colors.white,
+                size: 22,
+              ),
             ),
           ),
           
@@ -216,21 +250,39 @@ class _KonsolDataClosingPageState extends State<KonsolDataClosingPage> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    _userName,
-                    style: TextStyle(
-                      fontSize: isTablet ? 18 : 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
+                  Container(
+                    constraints: BoxConstraints(maxWidth: isTablet ? 150 : 120),
+                    child: Text(
+                      _userName,
+                      style: TextStyle(
+                        fontSize: isTablet ? 18 : 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
-                  Text(
-                    _nik,
-                    style: TextStyle(
-                      fontSize: isTablet ? 14 : 12,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF6B7280),
-                    ),
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: _authService.getUserData(),
+                    builder: (context, snapshot) {
+                      String nik = '';
+                      if (snapshot.hasData && snapshot.data != null) {
+                        nik = snapshot.data!['userId'] ?? 
+                              snapshot.data!['userID'] ?? 
+                              '';
+                      } else {
+                        nik = _userId;
+                      }
+                      return Text(
+                        nik,
+                        style: TextStyle(
+                          fontSize: isTablet ? 14 : 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -667,39 +719,44 @@ class _KonsolDataClosingPageState extends State<KonsolDataClosingPage> {
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
           // Add Data button
-          Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: isTablet ? 24 : 20,
-              vertical: isTablet ? 12 : 10,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.green.shade400,
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.add,
-                  size: isTablet ? 20 : 18,
-                  color: Colors.white,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'Add Data',
-                  style: TextStyle(
-                    fontSize: isTablet ? 16 : 14,
-                    fontWeight: FontWeight.bold,
+          GestureDetector(
+            onTap: () {
+              Navigator.pushNamed(context, '/konsol_data_closing_form');
+            },
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isTablet ? 24 : 20,
+                vertical: isTablet ? 12 : 10,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.green.shade400,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.add,
+                    size: isTablet ? 20 : 18,
                     color: Colors.white,
                   ),
-                ),
-              ],
+                  SizedBox(width: 8),
+                  Text(
+                    'Add Data',
+                    style: TextStyle(
+                      fontSize: isTablet ? 16 : 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

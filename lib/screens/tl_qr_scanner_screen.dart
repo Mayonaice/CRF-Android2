@@ -53,6 +53,19 @@ class _TLQRScannerScreenState extends State<TLQRScannerScreen> {
     
     // Cek kredensial TL yang tersimpan
     _checkSavedCredentials();
+    
+    // Check if we have a QR result passed from tl_home_page
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (ModalRoute.of(context)?.settings.arguments != null) {
+        final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+        final qrResult = args?['qrResult'] as String?;
+        
+        if (qrResult != null && qrResult.isNotEmpty) {
+          debugPrint('Received QR result from home page: ${qrResult.length > 20 ? qrResult.substring(0, 20) + "..." : qrResult}');
+          _processQRCodeFromArgs(qrResult);
+        }
+      }
+    });
   }
   
   @override
@@ -1076,6 +1089,31 @@ class _TLQRScannerScreenState extends State<TLQRScannerScreen> {
         ),
       ),
     );
+  }
+
+  // Process QR code received from tl_home_page
+  Future<void> _processQRCodeFromArgs(String qrResult) async {
+    setState(() {
+      _isProcessing = true;
+    });
+    
+    try {
+      await _processQRCode(qrResult);
+    } catch (e) {
+      debugPrint('Error processing QR code from args: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error memproses QR code: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
   }
 
   // PERBAIKAN: Metode untuk memulai scan QR code

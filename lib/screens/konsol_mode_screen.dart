@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../services/auth_service.dart';
+import '../services/konsol_api_service.dart';
+import '../widgets/custom_modals.dart';
 
 class KonsolModePage extends StatefulWidget {
   const KonsolModePage({super.key});
@@ -16,8 +18,20 @@ class _KonsolModePageState extends State<KonsolModePage> {
   DateTime toDate = DateTime.now();
   String searchQuery = '';
   final AuthService _authService = AuthService();
-  String _userName = 'Lorenzo Putra'; // Default value
-  String _branchName = 'JAKARTA-CIDENG'; // Default value
+  final KonsolApiService _konsolApiService = KonsolApiService();
+  String _userName = ''; 
+  String _branchName = '';
+  String _branchCode = '';
+  String _userId = '';
+  
+  // List to store konsol data from API
+  List<KonsolData> _konsolDataList = [];
+  List<KonsolData> _filteredData = [];
+  bool _isLoading = false;
+  String _errorMessage = '';
+  
+  // Selected konsol data
+  KonsolData? _selectedKonsolData;
 
   @override
   void initState() {
@@ -35,13 +49,118 @@ class _KonsolModePageState extends State<KonsolModePage> {
       final userData = await _authService.getUserData();
       if (userData != null) {
         setState(() {
-          _userName = userData['userName'] ?? userData['userID'] ?? userData['name'] ?? 'Lorenzo Putra';
-          _branchName = userData['branchName'] ?? userData['branch'] ?? 'JAKARTA-CIDENG';
+          _userName = userData['userName'] ?? userData['name'] ?? '';
+          _userId = userData['userId'] ?? userData['userID'] ?? '';
+          _branchName = userData['branchName'] ?? userData['branch'] ?? '';
+          _branchCode = userData['groupId'] ?? userData['branchCode'] ?? '1'; // Menggunakan groupId
         });
+        debugPrint('🔍 User data loaded - Branch Code: $_branchCode, UserName: $_userName, UserID: $_userId');
+        _loadKonsolData(); // Load konsol data after user data is loaded
       }
     } catch (e) {
       debugPrint('Error loading user data: $e');
     }
+  }
+  
+  // Load konsol data from API
+  Future<void> _loadKonsolData() async {
+    // Pastikan user data sudah dimuat terlebih dahulu
+    if (_branchCode.isEmpty) {
+      await _loadUserData();
+    }
+    
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+    
+    try {
+      // Selalu gunakan branch code untuk filter data
+      debugPrint('🔍 Fetching konsol data with BranchCode: $_branchCode');
+      final konsolData = await _konsolApiService.getKonsolAndroidList(
+        branchCode: _branchCode
+      );
+      
+      setState(() {
+        _konsolDataList = konsolData;
+        _isLoading = false;
+      });
+      
+      debugPrint('🔍 Loaded ${konsolData.length} konsol data items');
+      
+      // Debug: Print all timeStart values
+      for (var item in konsolData) {
+        debugPrint('🔍 Item ${item.id}: timeStart=${item.timeStart}');
+      }
+      
+      // Filter data based on current date range
+      _filterAndUpdateData();
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load konsol data: $e';
+        _isLoading = false;
+      });
+      debugPrint('Error loading konsol data: $e');
+    }
+  }
+  
+  // Filter konsol data based on date range
+  void _filterAndUpdateData() {
+    if (_konsolDataList.isEmpty) {
+      setState(() {
+        _filteredData = [];
+      });
+      debugPrint('🔍 Filter: No data in _konsolDataList');
+      return;
+    }
+    
+    debugPrint('🔍 Filter: Starting with ${_konsolDataList.length} items');
+    
+    final filtered = _konsolDataList.where((data) {
+      // Parse TimeStart date
+      if (data.timeStart == null) {
+        debugPrint('🔍 Filter: Item ${data.id} has null timeStart');
+        return false; // Skip items with null timeStart
+      }
+      
+      DateTime? processDate;
+      try {
+        processDate = DateTime.parse(data.timeStart!);
+        debugPrint('🔍 Filter: Parsed date for item ${data.id}: ${processDate.toString()}');
+      } catch (e) {
+        debugPrint('🔍 Filter: Failed to parse date for item ${data.id}: ${data.timeStart}');
+        return false; // Skip items with invalid dates
+      }
+      
+      // Check if date is within range
+      final inRange = (processDate.isAfter(fromDate.subtract(const Duration(days: 1))) || 
+                      processDate.isAtSameMomentAs(fromDate)) && 
+                      (processDate.isBefore(toDate.add(const Duration(days: 1))) || 
+                      processDate.isAtSameMomentAs(toDate));
+      
+      // Apply search filter if search query is not empty
+      final searchMatch = searchQuery.isEmpty || 
+                        (data.atmCode?.toLowerCase().contains(searchQuery.toLowerCase()) ?? false) ||
+                        (data.id?.toLowerCase().contains(searchQuery.toLowerCase()) ?? false) ||
+                        (data.name?.toLowerCase().contains(searchQuery.toLowerCase()) ?? false);
+      
+      final result = inRange && searchMatch;
+      if (!result) {
+        debugPrint('🔍 Filter: Item ${data.id} excluded. inRange=$inRange, searchMatch=$searchMatch');
+      } else {
+        debugPrint('🔍 Filter: Item ${data.id} included. inRange=$inRange, searchMatch=$searchMatch');
+      }
+      return result;
+    }).toList();
+    
+    setState(() {
+      _filteredData = filtered;
+    });
+    
+    debugPrint('🔍 Filter: Finished with ${_filteredData.length} items');
+    
+    // No fallback - if filter doesn't match any items, show empty list
+    debugPrint('🔍 Filter: Final filtered count: ${_filteredData.length}');
   }
 
   @override
@@ -69,21 +188,23 @@ class _KonsolModePageState extends State<KonsolModePage> {
             _buildHeader(isTablet),
             _buildNavigationTabs(isTablet),
             Expanded(
-              child: Padding(
-                padding: EdgeInsets.all(isTablet ? 24.0 : 16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildDataKonsolSection(isTablet),
-                    SizedBox(height: isTablet ? 24 : 20),
-                    _buildDateRangeSection(isTablet),
-                    SizedBox(height: isTablet ? 24 : 20),
-                    _buildSearchSection(isTablet),
-                    SizedBox(height: isTablet ? 24 : 20),
-                    _buildDataTable(isTablet, screenHeight),
-                    SizedBox(height: isTablet ? 24 : 20),
-                    _buildBottomSections(isTablet, screenHeight),
-                  ],
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: EdgeInsets.all(isTablet ? 24.0 : 16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildDataKonsolSection(isTablet),
+                      SizedBox(height: isTablet ? 24 : 20),
+                      _buildDateRangeSection(isTablet),
+                      SizedBox(height: isTablet ? 24 : 20),
+                      _buildSearchSection(isTablet),
+                      SizedBox(height: isTablet ? 24 : 20),
+                      _buildDataTable(isTablet, screenHeight),
+                      SizedBox(height: isTablet ? 24 : 20),
+                      _buildBottomSections(isTablet, screenHeight),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -113,20 +234,20 @@ class _KonsolModePageState extends State<KonsolModePage> {
       ),
       child: Row(
         children: [
-          // Back button - Red triangle/arrow
+          // Menu button - Green hamburger icon
           GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
               width: isTablet ? 48 : 40,
               height: isTablet ? 48 : 40,
               decoration: const BoxDecoration(
-                color: Color(0xFFDC2626),
+                color: Color(0xFF10B981),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.arrow_back_ios,
+                Icons.menu,
                 color: Colors.white,
-                size: 20,
+                size: 24,
               ),
             ),
           ),
@@ -158,13 +279,33 @@ class _KonsolModePageState extends State<KonsolModePage> {
                   color: Colors.black,
                   letterSpacing: 0.5,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
-              Text(
-                'Meja : 010101',
-                style: TextStyle(
-                  fontSize: isTablet ? 16 : 14,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF6B7280),
+              Container(
+                width: isTablet ? 100 : 80,
+                child: FutureBuilder<Map<String, dynamic>?>(
+                  future: _authService.getUserData(),
+                  builder: (context, snapshot) {
+                    String meja = '';
+                    if (snapshot.hasData && snapshot.data != null) {
+                      meja = snapshot.data!['noMeja'] ?? 
+                            snapshot.data!['NoMeja'] ?? 
+                            '010101';
+                    } else {
+                      meja = '010101';
+                    }
+                    return Text(
+                      'Meja: $meja',
+                      style: TextStyle(
+                        fontSize: isTablet ? 16 : 14,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF6B7280),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    );
+                  },
                 ),
               ),
             ],
@@ -196,17 +337,22 @@ class _KonsolModePageState extends State<KonsolModePage> {
           SizedBox(width: isTablet ? 16 : 12),
           
           // Refresh button
-          Container(
-            width: isTablet ? 44 : 40,
-            height: isTablet ? 44 : 40,
-            decoration: const BoxDecoration(
-              color: Color(0xFF10B981),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.refresh,
-              color: Colors.white,
-              size: 22,
+          GestureDetector(
+            onTap: () {
+              _loadKonsolData(); // Refresh data when clicked
+            },
+            child: Container(
+              width: isTablet ? 44 : 40,
+              height: isTablet ? 44 : 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFF10B981),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.refresh,
+                color: Colors.white,
+                size: 22,
+              ),
             ),
           ),
           
@@ -219,21 +365,39 @@ class _KonsolModePageState extends State<KonsolModePage> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    _userName,
-                    style: TextStyle(
-                      fontSize: isTablet ? 18 : 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
+                  Container(
+                    constraints: BoxConstraints(maxWidth: isTablet ? 150 : 120),
+                    child: Text(
+                      _userName,
+                      style: TextStyle(
+                        fontSize: isTablet ? 18 : 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
-                  Text(
-                    '9190812021',
-                    style: TextStyle(
-                      fontSize: isTablet ? 14 : 12,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF6B7280),
-                    ),
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: _authService.getUserData(),
+                    builder: (context, snapshot) {
+                      String nik = '';
+                      if (snapshot.hasData && snapshot.data != null) {
+                                              nik = snapshot.data!['userId'] ?? 
+                            snapshot.data!['userID'] ?? 
+                            '';
+                      } else {
+                        nik = _userId;
+                      }
+                      return Text(
+                        nik,
+                        style: TextStyle(
+                          fontSize: isTablet ? 14 : 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -444,6 +608,27 @@ class _KonsolModePageState extends State<KonsolModePage> {
           _buildDateField(toDate, isTablet, (date) {
             setState(() => toDate = date);
           }),
+          
+          SizedBox(width: isTablet ? 20 : 16),
+          
+          ElevatedButton.icon(
+            onPressed: _loadKonsolData,
+            icon: Icon(Icons.refresh, size: isTablet ? 20 : 18),
+            label: Text(
+              'Refresh',
+              style: TextStyle(
+                fontSize: isTablet ? 16 : 14,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(
+                horizontal: isTablet ? 16 : 12,
+                vertical: isTablet ? 12 : 10,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -458,7 +643,11 @@ class _KonsolModePageState extends State<KonsolModePage> {
           firstDate: DateTime(2020),
           lastDate: DateTime(2030),
         );
-        if (picked != null) onChanged(picked);
+        if (picked != null) {
+          onChanged(picked);
+          // Explicitly call filter when date changes
+          _filterAndUpdateData();
+        }
       },
       child: Container(
         padding: EdgeInsets.symmetric(
@@ -524,7 +713,10 @@ class _KonsolModePageState extends State<KonsolModePage> {
             color: Colors.white,
           ),
           child: TextField(
-            onChanged: (value) => setState(() => searchQuery = value),
+            onChanged: (value) {
+              setState(() => searchQuery = value);
+              _filterAndUpdateData();
+            },
             style: TextStyle(fontSize: isTablet ? 16 : 14),
             decoration: InputDecoration(
               border: InputBorder.none,
@@ -643,16 +835,403 @@ class _KonsolModePageState extends State<KonsolModePage> {
           ),
           // Table Body
           Expanded(
-            child: Center(
-              child: Text(
-                'No data available',
-                style: TextStyle(
-                  color: Color(0xFF9CA3AF),
-                  fontStyle: FontStyle.italic,
-                  fontSize: 16,
-                ),
-              ),
-            ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _errorMessage.isNotEmpty
+                    ? Center(
+                        child: Text(
+                          _errorMessage,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      )
+                    : _filteredData.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No data available',
+                              style: TextStyle(
+                                color: Color(0xFF9CA3AF),
+                                fontStyle: FontStyle.italic,
+                                fontSize: 16,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: _filteredData.length,
+                            itemBuilder: (context, index) {
+                              final data = _filteredData[index];
+                              final isSelected = _selectedKonsolData?.id == data.id;
+                              
+                              // Format dates
+                              String formattedDateReplenish = 'N/A';
+                              if (data.dateReplenish != null) {
+                                try {
+                                  final date = DateTime.parse(data.dateReplenish!);
+                                  formattedDateReplenish = DateFormat('dd MMM yyyy').format(date);
+                                } catch (e) {
+                                  formattedDateReplenish = 'Invalid';
+                                }
+                              }
+                              
+                              String formattedActualReplenish = 'N/A';
+                              if (data.actualDateReplenish != null) {
+                                try {
+                                  final date = DateTime.parse(data.actualDateReplenish!);
+                                  formattedActualReplenish = DateFormat('dd MMM yyyy').format(date);
+                                } catch (e) {
+                                  formattedActualReplenish = 'Invalid';
+                                }
+                              }
+                              
+                              String formattedTimeStart = 'N/A';
+                              if (data.timeStart != null) {
+                                try {
+                                  final date = DateTime.parse(data.timeStart!);
+                                  formattedTimeStart = DateFormat('dd MMM yyyy').format(date);
+                                } catch (e) {
+                                  formattedTimeStart = 'Invalid';
+                                }
+                              }
+                              
+                              return GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedKonsolData = data;
+                                  });
+                                },
+                                child: Container(
+                                  height: isTablet ? 50 : 40,
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? const Color(0xFFE5E7EB) : Colors.white,
+                                    border: Border(
+                                      bottom: BorderSide(color: const Color(0xFFD1D5DB)),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      // ID Tool
+                                      Container(
+                                        width: columnWidths['ID Tool'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            data.id ?? 'N/A',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // Tanggal Replenish
+                                      Container(
+                                        width: columnWidths['Tanggal\nReplenish'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            formattedDateReplenish,
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // Actual Replenish
+                                      Container(
+                                        width: columnWidths['Actual\nReplenish'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            formattedActualReplenish,
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // Tanggal Proses
+                                      Container(
+                                        width: columnWidths['Tanggal Proses'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            formattedTimeStart,
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // WSID
+                                      Container(
+                                        width: columnWidths['WSID'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            data.atmCode ?? 'N/A',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // A1
+                                      Container(
+                                        width: columnWidths['A1'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            data.a1Edit?.toString() ?? '0',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // A2
+                                      Container(
+                                        width: columnWidths['A2'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            data.a2Edit?.toString() ?? '0',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // A5
+                                      Container(
+                                        width: columnWidths['A5'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            data.a5Edit?.toString() ?? '0',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // A10
+                                      Container(
+                                        width: columnWidths['A10'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            data.a10Edit?.toString() ?? '0',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // A20
+                                      Container(
+                                        width: columnWidths['A20'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            data.a20Edit?.toString() ?? '0',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // A50
+                                      Container(
+                                        width: columnWidths['A50'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            data.a50Edit?.toString() ?? '0',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // A75
+                                      Container(
+                                        width: columnWidths['A75'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            data.a75Edit?.toString() ?? '0',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // A100
+                                      Container(
+                                        width: columnWidths['A100'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            data.a100Edit?.toString() ?? '0',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // QTY
+                                      Container(
+                                        width: columnWidths['QTY'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            data.tQtyEdit?.toString() ?? '0',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // Value
+                                      Container(
+                                        width: columnWidths['Value'],
+                                        padding: EdgeInsets.all(isTablet ? 8 : 4),
+                                        child: Center(
+                                          child: Text(
+                                            data.tValueEdit != null 
+                                                ? NumberFormat.currency(
+                                                    locale: 'id',
+                                                    symbol: '',
+                                                    decimalDigits: 0,
+                                                  ).format(data.tValueEdit)
+                                                : '0',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 10 : 8,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
           ),
         ],
       ),
@@ -736,16 +1315,26 @@ class _KonsolModePageState extends State<KonsolModePage> {
                         borderRadius: BorderRadius.circular(6),
                         color: const Color(0xFFF9FAFB),
                       ),
-                      child: const Center(
-                        child: Text(
-                          'Map/Location View',
-                          style: TextStyle(
-                            color: Color(0xFF9CA3AF),
-                            fontStyle: FontStyle.italic,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
+                      padding: EdgeInsets.all(isTablet ? 16 : 12),
+                      alignment: Alignment.centerLeft,
+                      child: _selectedKonsolData == null
+                          ? const Text(
+                              'No data selected',
+                              style: TextStyle(
+                                color: Color(0xFF9CA3AF),
+                                fontStyle: FontStyle.italic,
+                                fontSize: 16,
+                              ),
+                            )
+                          : Text(
+                              _selectedKonsolData!.name ?? 'N/A',
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.w500,
+                                fontSize: isTablet ? 16 : 14,
+                              ),
+                              textAlign: TextAlign.left,
+                            ),
                     ),
                   ),
                 ],
@@ -823,28 +1412,286 @@ class _KonsolModePageState extends State<KonsolModePage> {
         ),
         // Body
         Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(6),
-                bottomRight: Radius.circular(6),
-              ),
-            ),
-            child: const Center(
-              child: Text(
-                'No data',
-                style: TextStyle(
-                  color: Color(0xFF9CA3AF),
-                  fontStyle: FontStyle.italic,
-                  fontSize: 14,
+          child: _selectedKonsolData == null
+              ? const Center(
+                  child: Text(
+                    'No data selected',
+                    style: TextStyle(
+                      color: Color(0xFF9CA3AF),
+                      fontStyle: FontStyle.italic,
+                      fontSize: 14,
+                    ),
+                  ),
+                )
+              : Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(6),
+                      bottomRight: Radius.circular(6),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      // ID Tool
+                      Container(
+                        width: columnWidths['ID Tool'],
+                        padding: EdgeInsets.all(isTablet ? 4 : 2),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _selectedKonsolData!.id ?? 'N/A',
+                            style: TextStyle(
+                              fontSize: isTablet ? 10 : 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      
+                      // A1
+                      Container(
+                        width: columnWidths['A1'],
+                        padding: EdgeInsets.all(isTablet ? 4 : 2),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _selectedKonsolData!.a1Default?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: isTablet ? 10 : 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      
+                      // A2
+                      Container(
+                        width: columnWidths['A2'],
+                        padding: EdgeInsets.all(isTablet ? 4 : 2),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _selectedKonsolData!.a2Default?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: isTablet ? 10 : 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      
+                      // A5
+                      Container(
+                        width: columnWidths['A5'],
+                        padding: EdgeInsets.all(isTablet ? 4 : 2),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _selectedKonsolData!.a5Default?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: isTablet ? 10 : 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      
+                      // A10
+                      Container(
+                        width: columnWidths['A10'],
+                        padding: EdgeInsets.all(isTablet ? 4 : 2),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _selectedKonsolData!.a10Default?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: isTablet ? 10 : 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      
+                      // A20
+                      Container(
+                        width: columnWidths['A20'],
+                        padding: EdgeInsets.all(isTablet ? 4 : 2),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _selectedKonsolData!.a20Default?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: isTablet ? 10 : 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      
+                      // A50
+                      Container(
+                        width: columnWidths['A50'],
+                        padding: EdgeInsets.all(isTablet ? 4 : 2),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _selectedKonsolData!.a50Default?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: isTablet ? 10 : 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      
+                      // A75
+                      Container(
+                        width: columnWidths['A75'],
+                        padding: EdgeInsets.all(isTablet ? 4 : 2),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _selectedKonsolData!.a75Default?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: isTablet ? 10 : 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      
+                      // A100
+                      Container(
+                        width: columnWidths['A100'],
+                        padding: EdgeInsets.all(isTablet ? 4 : 2),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _selectedKonsolData!.a100Default?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: isTablet ? 10 : 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      
+                      // QTY - Calculate total from defaults
+                      Container(
+                        width: columnWidths['QTY'],
+                        padding: EdgeInsets.all(isTablet ? 4 : 2),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: const Color(0xFFD1D5DB)),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _calculateTotalQty(_selectedKonsolData!).toString(),
+                            style: TextStyle(
+                              fontSize: isTablet ? 10 : 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      
+                      // Value - Calculate total value from defaults
+                      Container(
+                        width: columnWidths['Value'],
+                        padding: EdgeInsets.all(isTablet ? 4 : 2),
+                        child: Center(
+                          child: Text(
+                            NumberFormat.currency(
+                              locale: 'id',
+                              symbol: '',
+                              decimalDigits: 0,
+                            ).format(_calculateTotalValue(_selectedKonsolData!)),
+                            style: TextStyle(
+                              fontSize: isTablet ? 10 : 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ),
-          ),
         ),
       ],
     );
+  }
+  
+  // Helper method to calculate total quantity from default values
+  int _calculateTotalQty(KonsolData data) {
+    return (data.a1Default ?? 0) +
+           (data.a2Default ?? 0) +
+           (data.a5Default ?? 0) +
+           (data.a10Default ?? 0) +
+           (data.a20Default ?? 0) +
+           (data.a50Default ?? 0) +
+           (data.a75Default ?? 0) +
+           (data.a100Default ?? 0);
+  }
+  
+  // Helper method to calculate total value from default values
+  int _calculateTotalValue(KonsolData data) {
+    return (data.a1Default ?? 0) * 1000 +
+           (data.a2Default ?? 0) * 2000 +
+           (data.a5Default ?? 0) * 5000 +
+           (data.a10Default ?? 0) * 10000 +
+           (data.a20Default ?? 0) * 20000 +
+           (data.a50Default ?? 0) * 50000 +
+           (data.a75Default ?? 0) * 75000 +
+           (data.a100Default ?? 0) * 100000;
   }
 
   Widget _buildFooter(bool isTablet) {
