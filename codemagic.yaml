@@ -2,7 +2,7 @@ workflows:
   android-build:
     name: Android Debug Build
     max_build_duration: 90
-    instance_type: mac_mini_m2
+    instance_type: mac_mini_m1
     environment:
       flutter: 3.13.9 # Menggunakan versi Flutter yang lebih baru dan stabil
       java: 11 # Menggunakan Java 11 untuk kompatibilitas dengan Gradle 7.0.2
@@ -410,14 +410,14 @@ workflows:
           -keep class com.advantage.crf_android.models.** { *; }
           EOL
           
-          # Tambahkan opsi Gradle untuk mempercepat build dan mengatasi masalah transformasi AAR
+          # Tambahkan opsi Gradle untuk mengurangi penggunaan memory dan disk
           cat > android/gradle.properties << 'EOL'
-          org.gradle.jvmargs=-Xmx6g -XX:MaxPermSize=3g -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
-          org.gradle.daemon=true
-          org.gradle.parallel=true
+          org.gradle.jvmargs=-Xmx2048m -XX:MaxPermSize=512m -Dfile.encoding=UTF-8
+          org.gradle.daemon=false
+          org.gradle.parallel=false
           org.gradle.configureondemand=true
-          org.gradle.caching=true
-          android.enableR8=true
+          org.gradle.caching=false
+          android.enableR8=false
           android.enableJetifier=true
           android.useAndroidX=true
           android.nonTransitiveRClass=true
@@ -425,12 +425,51 @@ workflows:
           android.enableResourceOptimizations=false
           android.disableAutomaticComponentCreation=true
           android.experimental.enableArtProfiles=false
+          # Opsi untuk mengurangi ukuran build
+          android.enableBuildScriptClasspathCheck=false
+          android.uniquePackageNames=false
+          android.enableSeparateAnnotationProcessing=false
+          android.enableAppCompileTimeRClass=false
           EOL
           
-          # Bersihkan cache Gradle untuk mengatasi masalah transformasi
+          # Bersihkan disk space untuk mengatasi masalah disk hampir penuh
+          echo "=== CLEANING DISK SPACE ==="
+          echo "Before cleaning:"
+          df -h
+          
+          # Hapus simulator yang tidak digunakan
+          echo "Removing unused simulators..."
+          xcrun simctl delete unavailable
+          
+          # Bersihkan cache Gradle
           echo "Cleaning Gradle cache..."
           rm -rf ~/.gradle/caches/transforms-3
+          rm -rf ~/.gradle/caches/modules-2
           mkdir -p ~/.gradle/caches/transforms-3
+          
+          # Bersihkan cache Flutter
+          echo "Cleaning Flutter cache..."
+          flutter clean
+          rm -rf ~/Library/Developer/Xcode/DerivedData
+          
+          # Bersihkan cache CocoaPods
+          echo "Cleaning CocoaPods cache..."
+          rm -rf ~/Library/Caches/CocoaPods
+          
+          # Bersihkan cache Homebrew
+          echo "Cleaning Homebrew cache..."
+          rm -rf ~/Library/Caches/Homebrew
+          
+          # Bersihkan cache npm
+          echo "Cleaning npm cache..."
+          rm -rf ~/.npm
+          
+          # Bersihkan file temporary
+          echo "Cleaning temporary files..."
+          rm -rf /tmp/*
+          
+          echo "After cleaning:"
+          df -h
           
           # Tambahkan logging lebih detail untuk membantu diagnosa
           echo "=== FLUTTER DOCTOR VERBOSE ==="
@@ -440,17 +479,25 @@ workflows:
           echo "=== FLUTTER DEVICES ==="
           flutter devices
           
-          # Pendekatan yang lebih sederhana untuk build APK
-          echo "=== BUILDING APK (SIMPLE APPROACH) ==="
-          cd android && ./gradlew clean && ./gradlew assembleDebug --info
+          # Pendekatan build minimal untuk mengatasi keterbatasan disk space
+          echo "=== BUILDING APK (MINIMAL APPROACH) ==="
+          # Gunakan opsi untuk mengurangi penggunaan disk
+          cd android && ./gradlew assembleDebug \
+            --no-daemon \
+            --max-workers=2 \
+            --no-build-cache \
+            --no-parallel \
+            -Dorg.gradle.jvmargs="-Xmx2048m -XX:MaxPermSize=512m" \
+            -Dandroid.enableR8.fullMode=false \
+            -Dkotlin.compiler.execution.strategy=in-process
           
           # Cek hasil build
           if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-            echo "✅ APK build berhasil dengan Gradle langsung!"
-            mkdir -p ../build/app/outputs/flutter-apk/
-            cp app/build/outputs/apk/debug/app-debug.apk ../build/app/outputs/flutter-apk/
-            ls -lh ../build/app/outputs/flutter-apk/app-debug.apk
-          else
+              echo "✅ APK build berhasil dengan Gradle langsung!"
+              mkdir -p ../build/app/outputs/flutter-apk/
+              cp app/build/outputs/apk/debug/app-debug.apk ../build/app/outputs/flutter-apk/
+              ls -lh ../build/app/outputs/flutter-apk/app-debug.apk
+            else
             echo "❌ APK build gagal!"
             echo "Diagnostic information:"
             echo "Free disk space:"
@@ -461,7 +508,7 @@ workflows:
             ps -m
             echo "Top processes:"
             ps -eo pid,ppid,user,%cpu,%mem,vsz,rss,stat,start,time,command | head -10
-            exit 1
+              exit 1
           fi
     artifacts:
-      - build/app/outputs/flutter-apk/app-debug.apk
+      - build/app/outputs/flutter-apk/app-debug.apk 
