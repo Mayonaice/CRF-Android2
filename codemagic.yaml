@@ -5,7 +5,7 @@ workflows:
     instance_type: mac_mini_m1
     environment:
       flutter: 3.13.9 # Menggunakan versi Flutter yang lebih baru dan stabil
-      java: 17 # Menggunakan Java 17 untuk kompatibilitas dengan Gradle terbaru
+      java: 11 # Menggunakan Java 11 untuk kompatibilitas dengan Gradle 7.0.2
     scripts:
       - name: Setup and build APK
         script: |
@@ -15,11 +15,8 @@ workflows:
           echo "Java version:"
           java -version
           
-          # PENTING: Tidak mengganti pubspec.yaml
-          # Gunakan pubspec.yaml yang ada untuk mempertahankan semua dependensi
-          
-          # PENTING: Tidak mengganti main.dart
-          # Gunakan main.dart yang ada untuk mempertahankan semua fitur aplikasi
+          # PENTING: Tidak mengganti pubspec.yaml dan main.dart
+          # Gunakan pubspec.yaml dan main.dart yang ada untuk mempertahankan semua fitur aplikasi
           
           # Buat folder assets jika belum ada
           mkdir -p assets/images
@@ -31,9 +28,8 @@ workflows:
           
           # Aktifkan multidex untuk menangani banyak metode
           echo "Configuring multidex..."
-          if [ ! -f "android/app/src/main/java/com/advantage/crf_android/MultidexApplication.java" ]; then
-            mkdir -p android/app/src/main/java/com/advantage/crf_android
-            cat > android/app/src/main/java/com/advantage/crf_android/MultidexApplication.java << 'EOL'
+          mkdir -p android/app/src/main/java/com/advantage/crf_android
+          cat > android/app/src/main/java/com/advantage/crf_android/MultidexApplication.java << 'EOL'
           package com.advantage.crf_android;
           
           import androidx.multidex.MultiDexApplication;
@@ -41,7 +37,6 @@ workflows:
           public class MultidexApplication extends MultiDexApplication {
           }
           EOL
-          fi
           
           # Pastikan AndroidManifest.xml menggunakan MultidexApplication
           if grep -q "android:name=\"\${applicationName}\"" "android/app/src/main/AndroidManifest.xml"; then
@@ -49,62 +44,124 @@ workflows:
             sed -i '' 's/android:name="\${applicationName}"/android:name=".MultidexApplication"/g' android/app/src/main/AndroidManifest.xml
           fi
           
-          # Pastikan build.gradle memiliki konfigurasi yang benar
-          if [ -f "android/app/build.gradle" ]; then
-            echo "Updating build.gradle for multidex..."
-            if ! grep -q "multiDexEnabled true" "android/app/build.gradle"; then
-              sed -i '' '/defaultConfig {/a\\        multiDexEnabled true' android/app/build.gradle
-            fi
-            
-            if ! grep -q "implementation 'androidx.multidex:multidex:" "android/app/build.gradle"; then
-              sed -i '' '/dependencies {/a\\    implementation "androidx.multidex:multidex:2.0.1"' android/app/build.gradle
-            fi
-          fi
+          # Hapus build.gradle.kts dan settings.gradle.kts jika ada
+          rm -f android/build.gradle.kts
+          rm -f android/settings.gradle.kts
+          rm -f android/app/build.gradle.kts
           
-          if [ -f "android/app/build.gradle.kts" ]; then
-            echo "Updating build.gradle.kts for multidex..."
-            if ! grep -q "multiDexEnabled = true" "android/app/build.gradle.kts"; then
-              sed -i '' '/defaultConfig {/a\\        multiDexEnabled = true' android/app/build.gradle.kts
-            fi
-            
-            if ! grep -q "implementation(\"androidx.multidex:multidex:" "android/app/build.gradle.kts"; then
-              sed -i '' '/dependencies {/a\\    implementation("androidx.multidex:multidex:2.0.1")' android/app/build.gradle.kts
-            fi
-          fi
+          # Buat build.gradle root yang kompatibel dengan Java 11
+          cat > android/build.gradle << 'EOL'
+          buildscript {
+              ext.kotlin_version = '1.7.10'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
           
-          # Tambahkan proguard rules untuk menghindari masalah obfuscation
-          cat > android/app/proguard-rules.pro << 'EOL'
-          # Flutter Wrapper
-          -keep class io.flutter.app.** { *; }
-          -keep class io.flutter.plugin.**  { *; }
-          -keep class io.flutter.util.**  { *; }
-          -keep class io.flutter.view.**  { *; }
-          -keep class io.flutter.**  { *; }
-          -keep class io.flutter.plugins.**  { *; }
-          -keep class io.flutter.plugin.editing.** { *; }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.0.2'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
           
-          # QR Scanner packages
-          -keep class net.sourceforge.zbar.** { *; }
-          -keep class com.google.mlkit.** { *; }
-          -keep class com.google.android.gms.** { *; }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           
-          # Android ID
-          -keep class androidx.core.** { *; }
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
           
-          # Camera
-          -keep class androidx.camera.** { *; }
-          
-          # Don't obfuscate model classes
-          -keep class com.advantage.crf_android.models.** { *; }
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
           EOL
           
-          # Build APK dengan verbose mode
-          echo "Building APK with verbose mode..."
-          flutter build apk --debug -v
+          # Buat build.gradle app yang kompatibel dengan Java 11
+          cat > android/app/build.gradle << 'EOL'
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withReader('UTF-8') { reader ->
+                  localProperties.load(reader)
+              }
+          }
           
-
+          def flutterRoot = localProperties.getProperty('flutter.sdk')
+          if (flutterRoot == null) {
+              throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+          }
           
-          # Buat settings.gradle
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+          if (flutterVersionCode == null) {
+              flutterVersionCode = '1'
+          }
+          
+          def flutterVersionName = localProperties.getProperty('flutter.versionName')
+          if (flutterVersionName == null) {
+              flutterVersionName = '1.0'
+          }
+          
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+          apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+          
+          android {
+              compileSdkVersion 33
+          
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          
+              kotlinOptions {
+                  jvmTarget = '1.8'
+              }
+          
+              sourceSets {
+                  main.java.srcDirs += 'src/main/kotlin'
+              }
+          
+              defaultConfig {
+                  applicationId "com.advantage.crf_android"
+                  minSdkVersion 21
+                  targetSdkVersion 33
+                  versionCode flutterVersionCode.toInteger()
+                  versionName flutterVersionName
+                  multiDexEnabled true
+              }
+          
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                      minifyEnabled false
+                      shrinkResources false
+                  }
+                  debug {
+                      minifyEnabled false
+                      shrinkResources false
+                  }
+              }
+          }
+          
+          flutter {
+              source '../..'
+          }
+          
+          dependencies {
+              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.7.10"
+              implementation "androidx.multidex:multidex:2.0.1"
+          }
+          EOL
+          
+          # Buat settings.gradle yang kompatibel dengan Java 11
           cat > android/settings.gradle << 'EOL'
           include ':app'
           
@@ -119,7 +176,7 @@ workflows:
           apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
           EOL
           
-          # Buat gradle-wrapper.properties
+          # Buat gradle-wrapper.properties yang kompatibel dengan Java 11
           mkdir -p android/gradle/wrapper
           cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOL'
           distributionBase=GRADLE_USER_HOME
@@ -198,9 +255,9 @@ workflows:
               fi
           done
           SAVED="`pwd`"
-          cd "`dirname \"$PRG\"`/" >/dev/null
+          cd "`dirname \"$PRG\"`/" >&-
           APP_HOME="`pwd -P`"
-          cd "$SAVED" >/dev/null
+          cd "$SAVED" >&-
           
           CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
           
@@ -305,25 +362,34 @@ workflows:
           # Make gradlew executable
           chmod +x android/gradlew
           
-          # Buat ic_launcher.png minimal
-          mkdir -p android/app/src/main/res/mipmap-mdpi
-          mkdir -p android/app/src/main/res/mipmap-hdpi
-          mkdir -p android/app/src/main/res/mipmap-xhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+          # Tambahkan proguard rules untuk menghindari masalah obfuscation
+          cat > android/app/proguard-rules.pro << 'EOL'
+          # Flutter Wrapper
+          -keep class io.flutter.app.** { *; }
+          -keep class io.flutter.plugin.**  { *; }
+          -keep class io.flutter.util.**  { *; }
+          -keep class io.flutter.view.**  { *; }
+          -keep class io.flutter.**  { *; }
+          -keep class io.flutter.plugins.**  { *; }
+          -keep class io.flutter.plugin.editing.** { *; }
           
-          # Buat ikon sederhana (1x1 piksel putih)
-          echo -n -e "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A\x00\x00\x00\x0D\x49\x48\x44\x52\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1F\x15\xC4\x89\x00\x00\x00\x0A\x49\x44\x41\x54\x78\x9C\x63\xF8\x0F\x00\x01\x01\x01\x00\x1B\x0C\x1B\x4C\x00\x00\x00\x00\x49\x45\x4E\x44\xAE\x42\x60\x82" > android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          # QR Scanner packages
+          -keep class net.sourceforge.zbar.** { *; }
+          -keep class com.google.mlkit.** { *; }
+          -keep class com.google.android.gms.** { *; }
           
-          # Get dependencies
-          flutter pub get
+          # Android ID
+          -keep class androidx.core.** { *; }
+          
+          # Camera
+          -keep class androidx.camera.** { *; }
+          
+          # Don't obfuscate model classes
+          -keep class com.advantage.crf_android.models.** { *; }
+          EOL
           
           # Build APK dengan verbose mode
-          echo "Building APK with verbose mode..."
+          echo "Building APK dengan verbose mode..."
           flutter build apk --debug -v
           
           # Cek hasil build
@@ -349,4 +415,4 @@ workflows:
             fi
           fi
     artifacts:
-      - build/app/outputs/flutter-apk/app-debug.apk 
+      - build/app/outputs/flutter-apk/app-debug.apk
