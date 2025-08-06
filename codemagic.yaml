@@ -38,10 +38,16 @@ workflows:
           }
           EOL
           
-          # Pastikan AndroidManifest.xml menggunakan MultidexApplication
+          # Pastikan AndroidManifest.xml menggunakan MultidexApplication dan memiliki package name
           if grep -q "android:name=\"\${applicationName}\"" "android/app/src/main/AndroidManifest.xml"; then
             echo "Updating AndroidManifest.xml to use MultidexApplication..."
             sed -i '' 's/android:name="\${applicationName}"/android:name=".MultidexApplication"/g' android/app/src/main/AndroidManifest.xml
+          fi
+          
+          # Tambahkan package name ke AndroidManifest.xml jika tidak ada
+          if ! grep -q "package=" "android/app/src/main/AndroidManifest.xml"; then
+            echo "Adding package name to AndroidManifest.xml..."
+            sed -i '' 's/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android"/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" package="com.advantage.crf_android"/g' android/app/src/main/AndroidManifest.xml
           fi
           
           # Hapus build.gradle.kts dan settings.gradle.kts jika ada
@@ -115,6 +121,7 @@ workflows:
           
           android {
               compileSdkVersion 33
+              namespace "com.advantage.crf_android"
           
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
@@ -415,4 +422,4 @@ workflows:
             fi
           fi
     artifacts:
-      - build/app/outputs/flutter-apk/app-debug.apk
+      - build/app/outputs/flutter-apk/app-debug.apk 
