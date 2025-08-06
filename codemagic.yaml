@@ -410,15 +410,6 @@ workflows:
           -keep class com.advantage.crf_android.models.** { *; }
           EOL
           
-          # Tambahkan logging untuk membantu debug
-          echo "Current directory: $(pwd)"
-          echo "Listing android directory:"
-          ls -la android
-          echo "Listing android/app directory:"
-          ls -la android/app
-          echo "Checking Gradle version:"
-          cd android && ./gradlew --version && cd ..
-          
           # Tambahkan opsi Gradle untuk mempercepat build dan mengatasi masalah transformasi AAR
           cat > android/gradle.properties << 'EOL'
           org.gradle.jvmargs=-Xmx6g -XX:MaxPermSize=3g -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
@@ -441,36 +432,6 @@ workflows:
           rm -rf ~/.gradle/caches/transforms-3
           mkdir -p ~/.gradle/caches/transforms-3
           
-          # Tambahkan konfigurasi transformasi AAR
-          mkdir -p android/app/build-cache
-          cat > android/app/build-cache/aar-transform-config.json << 'EOL'
-          {
-            "version": 1,
-            "transformations": [
-              {
-                "name": "androidx.camera:camera-core:1.2.3",
-                "cacheable": true
-              },
-              {
-                "name": "androidx.camera:camera-camera2:1.2.3",
-                "cacheable": true
-              },
-              {
-                "name": "androidx.camera:camera-lifecycle:1.2.3",
-                "cacheable": true
-              },
-              {
-                "name": "androidx.camera:camera-view:1.2.3",
-                "cacheable": true
-              },
-              {
-                "name": "androidx.camera:camera-video:1.2.3",
-                "cacheable": true
-              }
-            ]
-          }
-          EOL
-          
           # Tambahkan logging lebih detail untuk membantu diagnosa
           echo "=== FLUTTER DOCTOR VERBOSE ==="
           flutter doctor -v
@@ -479,75 +440,28 @@ workflows:
           echo "=== FLUTTER DEVICES ==="
           flutter devices
           
-          # Build APK dengan pendekatan yang lebih sederhana dan logging detail
-          echo "=== BUILDING APK (BASIC APPROACH) ==="
-          flutter build apk --debug --verbose
+          # Pendekatan yang lebih sederhana untuk build APK
+          echo "=== BUILDING APK (SIMPLE APPROACH) ==="
+          cd android && ./gradlew clean && ./gradlew assembleDebug --info
           
-          # Cek hasil build dan gunakan pendekatan alternatif jika gagal
-          BUILD_RESULT=$?
-          if [ $BUILD_RESULT -ne 0 ]; then
-            echo "⚠️ Flutter build failed with code $BUILD_RESULT. Trying alternative approach..."
-            
-            echo "=== FLUTTER CLEAN ==="
-            flutter clean
-            
-            echo "=== FLUTTER PUB GET (RETRY) ==="
-            flutter pub get
-            
-            echo "=== BUILDING APK (ALTERNATIVE APPROACH) ==="
-            flutter build apk --debug --split-debug-info=build/debug-info
-            
-            if [ $? -ne 0 ]; then
-              echo "⚠️ Flutter build still failed. Trying direct Gradle build..."
-              cd android && ./gradlew --info assembleDebug
-            
-            if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-              echo "✅ APK build berhasil dengan Gradle langsung!"
-              mkdir -p ../build/app/outputs/flutter-apk/
-              cp app/build/outputs/apk/debug/app-debug.apk ../build/app/outputs/flutter-apk/
-              ls -lh ../build/app/outputs/flutter-apk/app-debug.apk
-            else
-              echo "❌ APK build masih gagal setelah timeout!"
-              echo "Diagnostic information:"
-              echo "Free disk space:"
-              df -h
-              echo "Memory usage:"
-              vm_stat
-              echo "Process memory info:"
-              ps -m
-              echo "Top processes:"
-              ps -eo pid,ppid,user,%cpu,%mem,vsz,rss,stat,start,time,command | head -10
-              exit 1
-            fi
-          elif [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
-            echo "✅ APK build berhasil!"
-            ls -lh build/app/outputs/flutter-apk/app-debug.apk
+          # Cek hasil build
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            echo "✅ APK build berhasil dengan Gradle langsung!"
+            mkdir -p ../build/app/outputs/flutter-apk/
+            cp app/build/outputs/apk/debug/app-debug.apk ../build/app/outputs/flutter-apk/
+            ls -lh ../build/app/outputs/flutter-apk/app-debug.apk
           else
             echo "❌ APK build gagal!"
-            echo "Mencoba build lagi dengan Gradle langsung..."
-            cd android && ./gradlew --stop && ./gradlew clean && ./gradlew assembleDebug --info
-            
-            if [ -f "../build/app/outputs/flutter-apk/app-debug.apk" ]; then
-              echo "✅ APK build berhasil pada percobaan kedua!"
-              ls -lh ../build/app/outputs/flutter-apk/app-debug.apk
-            elif [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-              echo "✅ APK build berhasil dengan Gradle langsung!"
-              mkdir -p ../build/app/outputs/flutter-apk/
-              cp app/build/outputs/apk/debug/app-debug.apk ../build/app/outputs/flutter-apk/
-              ls -lh ../build/app/outputs/flutter-apk/app-debug.apk
-            else
-              echo "❌ APK build masih gagal!"
-              echo "Diagnostic information:"
-              echo "Free disk space:"
-              df -h
-              echo "Memory usage:"
-              vm_stat
-              echo "Process memory info:"
-              ps -m
-              echo "Top processes:"
-              ps -eo pid,ppid,user,%cpu,%mem,vsz,rss,stat,start,time,command | head -10
-              exit 1
-            fi
+            echo "Diagnostic information:"
+            echo "Free disk space:"
+            df -h
+            echo "Memory usage:"
+            vm_stat
+            echo "Process memory info:"
+            ps -m
+            echo "Top processes:"
+            ps -eo pid,ppid,user,%cpu,%mem,vsz,rss,stat,start,time,command | head -10
+            exit 1
           fi
     artifacts:
-      - build/app/outputs/flutter-apk/app-debug.apk 
+      - build/app/outputs/flutter-apk/app-debug.apk
